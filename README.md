@@ -1,116 +1,215 @@
 # agent-use
 
-A local, provider-neutral agent dispatcher. It runs registered adapters in order,
-tries fallbacks when a route fails, and saves drafts for review. Every result has
-`accepted: false`; generation never means approval. Two offline example adapters
-are included. No model service or account is required to try them.
+[简体中文](README.zh-CN.md) · [Protocol reference](docs/DISPATCHER.md) · [Adapter guide](docs/ADAPTERS.md)
 
-[Chinese](README.zh-CN.md) · [Protocol reference](docs/DISPATCHER.md) · [Adapter guide](docs/ADAPTERS.md)
+agent-use is a unified dispatch entry point for AI coding assistants and the people
+building workflows around them. Use the same command to hand a task to different
+models or command-line tools, try the next one in order if a route fails, and save
+`status.json` plus `response.txt` on success for the caller to review. Every result
+keeps `accepted: false`: producing a draft never approves it. A **provider** is a
+named execution target; an **adapter** is the program that connects that target to
+agent-use; a **registry** is the JSON configuration listing providers and how to
+run them. A **profile** names an ordered list of providers to try.
 
-## Quick start
+## Requirements
 
-Requirements: Python 3.11+, Bash, and a POSIX system (such as Linux or macOS).
-Run these commands from the repository root:
+- Python 3.11+; the core and bundled adapters use only the standard library.
+- A POSIX system, such as Linux or macOS. The code and tests require POSIX process
+  groups and `fcntl` file locks; native Windows is not supported.
+- Git to clone the repository, Bash for the commands and tests below, and the
+  standard `tr` utility for the CLI example.
+
+The examples run offline without a model account. Downloading the repository for
+the first time requires network access; if you already have a local copy, skip
+the clone step.
+
+## Five-minute quick start
+
+Clone the repository, then run all subsequent commands from its root:
 
 ```bash
-python3 -B scripts/agent_use.py list
-printf '%s' '{"version":1,"task":"hello"}' | python3 -B scripts/agent_use.py validate
-printf '%s' '{"version":1,"task":"hello","profile":"fallback-demo"}' | python3 -B scripts/agent_use.py run
+git clone https://github.com/Sean529/agent-use.git
+cd agent-use
+python3 -B scripts/agent_use.py list --config config/dispatcher.json
 ```
 
-The last command tries `fail-demo`, then returns `echo: hello` from `echo`.
-Its JSON includes attempts and the run directory. Without `output`, results are
-stored in a new system temporary directory.
+`list` prints JSON with the providers `echo`, `fail-demo`, and `upper`, their
+profiles, and `config_path` (the resolved registry path). The explicit `--config`
+keeps this walkthrough independent of any registry already on your machine.
 
-The file-based interface writes durable artifacts to a directory you choose:
+Run a task through the built-in echo adapter, which returns the task with an
+`echo: ` prefix rather than calling a model:
+
+```bash
+printf '%s' '{"version":1,"task":"hello","providers":["echo"],"output":"runs/hello","expect_exact":"echo: hello"}' | python3 -B scripts/agent_use.py run --config config/dispatcher.json
+```
+
+The command exits 0, prints progress to stderr, and returns JSON on stdout.
+These are selected fields from that JSON:
+
+```json
+{
+  "state": "staged_for_review",
+  "accepted": false,
+  "selected_provider": "echo",
+  "response": "echo: hello"
+}
+```
+
+The response also includes `run_directory`. Inspect the saved artifacts:
+
+```bash
+ls runs/hello
+cat runs/hello/response.txt
+cat runs/hello/status.json
+```
+
+| Artifact | Contents |
+| --- | --- |
+| `task.txt` | The submitted task |
+| `status.json` | State, selected provider, attempt records, and verification hashes |
+| `response.txt` | The draft response, written on success (`echo: hello` here) |
+| `attempts/` | Per-attempt workspace; adapters may write files here |
+
+An identical successful request can reuse its directory if its fingerprint and
+response hash still match. After a failed run or changes to the request, artifacts,
+dependencies, or runtime environment, choose a fresh output directory. Omitting
+`output` creates a new system temporary location.
+
+To see automatic fallback, use the bundled `fallback-demo` profile:
+
+```bash
+printf '%s' '{"version":1,"task":"hello","profile":"fallback-demo","expect_exact":"echo: hello"}' | python3 -B scripts/agent_use.py run --config config/dispatcher.json
+```
+
+`fail-demo` deliberately fails; `echo` then succeeds. The `attempts` array records
+both. Interruption stops the chain; see [failure semantics](docs/DISPATCHER.md#failure-and-fallback-semantics).
+
+## Connect your own model: wrap a CLI
+
+If you already have a command-line tool that accepts task text and prints a
+response, use [cli_adapter.py](examples/cli_adapter.py). You do not need to write
+the adapter protocol yourself. First try this complete, offline registry. It
+wraps `tr a-z A-Z`, turning `hello` into `HELLO`:
 
 ```bash
 mkdir -p runs
-printf '%s' hello > runs/task.txt
-python3 -B scripts/run_agent.py runs/task.txt runs/hello --expect-exact 'echo: hello'
-python3 -B scripts/run_agent.py runs/task.txt runs/custom --option 'echo.prefix=draft: '
+cat > runs/dispatcher.json <<'JSON'
+{
+  "version": 1,
+  "default_profile": "local",
+  "providers": {
+    "my-cli": {
+      "command": [
+        "{python}", "-B", "{repo}/examples/cli_adapter.py",
+        "--", "tr", "a-z", "A-Z"
+      ],
+      "default_model": "local-demo",
+      "timeout": 60,
+      "tool_policy": "unknown"
+    }
+  },
+  "profiles": {
+    "local": ["my-cli"]
+  }
+}
+JSON
+python3 -B scripts/agent_use.py list --config runs/dispatcher.json
+printf '%s' '{"version":1,"task":"hello","profile":"local"}' | python3 -B scripts/agent_use.py validate --config runs/dispatcher.json
+printf '%s' '{"version":1,"task":"hello","profile":"local","expect_exact":"HELLO"}' | python3 -B scripts/agent_use.py run --config runs/dispatcher.json
 ```
 
-An identical successful request can reuse its directory. A changed request,
-modified response, or failed run requires a new output directory.
+All three commands exit 0. `list` shows `my-cli`; `validate` returns
+`"state": "valid"`; `run` returns `"response": "HELLO"` and `accepted: false`.
+Validation checks the registry and request without launching the command. It does
+not test executable availability, authentication, or runtime behavior.
 
-```bash
-bash scripts/test.sh
-SKILLS_DIR="$HOME/.agents/skills" bash scripts/install.sh
-```
+To connect your model, replace `tr`, `a-z`, and `A-Z` with your installed CLI's
+executable and actual arguments, and set `default_model` to your model identifier.
+Everything after `--` belongs to that CLI. The wrapper sends task text to stdin
+and uses nonblank UTF-8 stdout as the response; stderr is discarded. It substitutes
+`{model}` and `{task_file}` once per argument, so a CLI that takes file input can
+receive the task file path. No shell expansion occurs, and `options` are not
+converted into CLI arguments. Configure authentication using the CLI's own
+mechanism; declare any additional environment access with registry `env_names`
+or `env_prefixes`. See [the integration guide](docs/ADAPTERS.md#quick-integration-with-a-local-cli).
 
-Installation creates only the `agent-use` skill link, is idempotent, and rejects
-conflicting content. `SKILLS_DIR` defaults to the location shown above.
+`{python}` means the current Python interpreter and `{repo}` the agent-use root.
+Keep the registry at any path selected by `--config`, or install it at the user
+location below. Both entry points select one registry in this order:
 
-## Write an adapter
+1. Explicit `--config PATH`.
+2. Nonempty `AGENT_USE_CONFIG` (with `~` expansion).
+3. `${XDG_CONFIG_HOME:-~/.config}/agent-use/dispatcher.json`.
+4. The bundled `config/dispatcher.json`.
 
-Use [examples/echo_adapter.py](examples/echo_adapter.py) as a starting point.
-Read one JSON object from stdin, read the UTF-8 task from `task_file`, and emit
-one JSON object on stdout. A successful response contains `protocol_version: 1`,
-`state: "staged_for_review"`, `accepted: false`, and a nonempty `response` string.
-For failure, emit `state: "failed"` with a machine-readable `reason`.
+Only a nonempty, absolute `XDG_CONFIG_HOME` is used; otherwise the base is
+`~/.config`. An absent user registry selects the bundled registry. A selected
+missing, unreadable, or invalid registry is an error, with no fallback; a broken
+symlink at the user location is also an error. `XDG_CONFIG_HOME` controls discovery
+only and is not added to the subprocess environment allowlist.
 
-Register an argv `command`, a `default_model`, and optional settings in
-`config/dispatcher.json` or a separate registry selected with `--config`.
-`{python}` and `{repo}` expand to the current interpreter and repository root.
-Declare overridable keys in `options` and any additional environment prefixes
-in `env_prefixes` or exact names in `env_names`. Add the provider to a profile to select it.
-See [the full protocol](docs/DISPATCHER.md) for validation and failure semantics,
-and [Reason codes](docs/DISPATCHER.md#reason-codes) for failure classification.
+## Write your own adapter
+
+Start with [echo_adapter.py](examples/echo_adapter.py) when wrapping a CLI is not
+enough. Read one JSON request from stdin, read the UTF-8 task from `task_file`,
+and emit exactly one JSON object on stdout. Success requires exit code 0,
+`protocol_version: 1`, `state: "staged_for_review"`, `accepted: false`, and a
+nonblank `response`. Failure uses `state: "failed"` and a machine-readable `reason`.
+
+Register an argv `command` and `default_model`, then add the provider to a profile.
+Declare overridable keys in `options` and additional environment access in
+`env_names` or `env_prefixes`. Test failure, timeout, interruption, and child-process
+cleanup as well as success. See [Writing adapters](docs/ADAPTERS.md),
+[the dispatcher protocol](docs/DISPATCHER.md), and [Reason codes](docs/DISPATCHER.md#reason-codes).
 
 ## Private adapters
 
-Keep your adapters and registry in a separate directory or private repository,
-for example `~/my-adapters/`. In that registry, use a command such as
-`["{python}", "-B", "{config_dir}/adapter.py"]` to reference your adapter.
-`{config_dir}` expands in each command argument to the real directory containing
-the registry, after resolving symlinks. `{python}` and `{repo}` remain available.
+Keep the public core general-purpose. Put service-specific adapters and your
+registry in a separate directory or private repository, such as `~/my-adapters/`.
+This private overlay is a separately selected registry, not an automatic merge
+with the bundled one. Select it using `--config`, `AGENT_USE_CONFIG`, or the user
+registry location described above; a symlink at that location also works.
 
-Select the registry with:
+In its command array, use `["{python}", "-B", "{config_dir}/adapter.py"]` to refer
+to a private adapter. `{config_dir}` is the registry's real containing directory
+after resolving symlinks. `{python}` and `{repo}` remain available. See
+[Private adapters in the protocol](docs/DISPATCHER.md#private-adapters).
 
-```bash
-export AGENT_USE_CONFIG="$HOME/my-adapters/dispatcher.json"
-python3 -B scripts/agent_use.py list
-```
+## Use with ai-harness
 
-Only a nonempty, absolute `XDG_CONFIG_HOME` is used; otherwise use `~/.config`.
-
-Alternatively, create a symlink at the default user location:
-
-```bash
-case "${XDG_CONFIG_HOME:-}" in /*) config_home="$XDG_CONFIG_HOME" ;; *) config_home="$HOME/.config" ;; esac
-mkdir -p "$config_home/agent-use"
-ln -sfn "$HOME/my-adapters/dispatcher.json" "$config_home/agent-use/dispatcher.json"
-```
-
-Both entry points use this lookup order: explicit `--config PATH`, nonempty
-`AGENT_USE_CONFIG` (with `~` expansion), the user registry at
-`${XDG_CONFIG_HOME:-~/.config}/agent-use/dispatcher.json`, then the bundled
-`config/dispatcher.json`. An empty `AGENT_USE_CONFIG` is ignored.
-`XDG_CONFIG_HOME` only selects the registry; it is not added to the subprocess
-allowlist. A selected missing or unreadable registry is an error, with no fallback;
-a broken symlink at the user location is also an error. `agent_use.py list`
-includes `config_path`, the resolved absolute registry path, for troubleshooting.
+[ai-harness](https://github.com/Sean529/ai-harness) is a multi-model task delegation
+layer. Its text seats (named delegation targets) call agent-use through
+`$AGENT_USE_HOME/scripts/run_agent.py`. Set `AGENT_USE_HOME` to your agent-use
+checkout and declare each seat's `provider` under `kind: "agent_use"` in
+ai-harness's local configuration, `~/.config/aiw/seats.local.json`. The provider
+must match a name in the effective agent-use registry. ai-harness's `aiw doctor`
+checks whether enabled seats reference registered, enabled providers and warns
+about mismatches. See its documentation for the complete seat configuration.
 
 ## Trust model
 
-The dispatcher does not obtain, store, or manage credentials. Keep secrets out
-of tasks, registry options, and adapter responses. Adapters own authentication.
-Commands run as argv without a shell; subprocess environments use an allowlist.
-Additional environment access must be declared in the trusted registry.
+The dispatcher does not obtain, store, or manage credentials. Adapters own
+authentication. Keep secrets out of tasks, registry options, responses, and
+diagnostics. Commands run as argv without a shell. Subprocess environments use
+an allowlist; the trusted registry declares additional access.
 
-Treat registries and adapters as local executable code: anyone who can change
-a registry can cause arbitrary commands to execute when it is used.
-`accepted: false` only marks a result as awaiting review; it cannot prevent
-side effects performed by an adapter.
+Treat registries and adapters as local executable code. Anyone who can change a
+registry can cause arbitrary commands to run. Adapters have the current user's
+operating-system permissions. This is not a sandbox: review code and commands
+before running them. `tool_policy` is a declaration, not system-level enforcement.
 
-Adapters run with the current user's operating-system permissions. This is not
-a sandbox: review adapter code and registry commands before running them.
-`tool_policy` is an adapter declaration, not operating-system enforcement.
-Task and response artifacts are local plaintext. All outputs remain drafts for
-human or caller review. See the protocol reference for environment and metadata
-filtering details.
+`accepted: false` marks a draft for review; it cannot prevent adapter side effects.
+Task and response artifacts are local plaintext. All outputs need human or caller
+review. See [Trust boundaries](docs/DISPATCHER.md#trust-boundaries) for details.
 
-## License
+## Tests and contributions
 
-[MIT](LICENSE).
+Run the offline test suite and shell checks from the repository root:
+
+```bash
+bash scripts/test.sh
+```
+
+Submit changes through a pull request. Keep contributions provider-neutral and
+follow [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under [MIT](LICENSE).
