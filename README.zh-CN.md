@@ -60,16 +60,17 @@ export AGENT_USE_CONFIG="$HOME/my-adapters/dispatcher.json"
 python3 -B scripts/agent_use.py list
 ```
 
+仅在 `XDG_CONFIG_HOME` 非空且为绝对路径时采用，否则忽略并使用 `~/.config`。
+
 也可以在默认用户位置创建软链：
 
 ```bash
-mkdir -p "$HOME/.config/agent-use"
-ln -s "$HOME/my-adapters/dispatcher.json" "$HOME/.config/agent-use/dispatcher.json"
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/agent-use"
+ln -sfn "$HOME/my-adapters/dispatcher.json" "${XDG_CONFIG_HOME:-$HOME/.config}/agent-use/dispatcher.json"
 ```
 
 两个入口的查找顺序相同：显式 `--config PATH` → 非空 `AGENT_USE_CONFIG`
 （展开 `~`）→ `${XDG_CONFIG_HOME:-~/.config}/agent-use/dispatcher.json` → 仓库自带 `config/dispatcher.json`。
-仅在 `XDG_CONFIG_HOME` 非空且为绝对路径时采用，否则忽略并使用 `~/.config`。
 `XDG_CONFIG_HOME` 只用于查找注册表，不加入子进程环境白名单。
 `AGENT_USE_CONFIG` 为空时忽略；选中的注册表缺失或不可读就报错，不回退。
 默认用户位置是断开的软链时也报错，不回退。

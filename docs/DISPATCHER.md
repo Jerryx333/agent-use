@@ -100,18 +100,19 @@ export AGENT_USE_CONFIG="$HOME/my-adapters/dispatcher.json"
 python3 -B scripts/agent_use.py list
 ```
 
+Only a nonempty, absolute `XDG_CONFIG_HOME` is used; otherwise use `~/.config`.
+
 Alternatively, create a symlink at the default user location:
 
 ```bash
-mkdir -p "$HOME/.config/agent-use"
-ln -s "$HOME/my-adapters/dispatcher.json" "$HOME/.config/agent-use/dispatcher.json"
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/agent-use"
+ln -sfn "$HOME/my-adapters/dispatcher.json" "${XDG_CONFIG_HOME:-$HOME/.config}/agent-use/dispatcher.json"
 ```
 
 Both entry points use this lookup order: explicit `--config PATH`, nonempty
 `AGENT_USE_CONFIG` (with `~` expansion), the user registry at
 `${XDG_CONFIG_HOME:-~/.config}/agent-use/dispatcher.json`, then the bundled
-`config/dispatcher.json`. Use `XDG_CONFIG_HOME` only when nonempty and absolute;
-otherwise ignore it and use `~/.config`. An empty `AGENT_USE_CONFIG` is ignored.
+`config/dispatcher.json`. An empty `AGENT_USE_CONFIG` is ignored.
 `XDG_CONFIG_HOME` only selects the registry; it is not added to the subprocess
 allowlist. A selected missing or unreadable registry is an error, with no fallback;
 a broken symlink at the user location is also an error. `agent_use.py list`
