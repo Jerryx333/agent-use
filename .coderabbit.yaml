@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches: [main]
+  path_instructions:
+    - path: "scripts/**"
+      instructions: >-
+        Use only the standard library for Python code. Launch subprocesses with
+        argv arrays, never shell=True. Pass environment variables only through
+        the base allowlist or registry env_prefixes and env_names. Update
+        docs/DISPATCHER.md and tests when protocol fields or reason values change.
+        Clean up process groups on timeout and interruption. Enforce input and
+        output size limits. Keep accepted=false in every result and run state.
+    - path: "examples/**"
+      instructions: >-
+        Keep example adapters dependency-free and runnable offline. Follow
+        docs/DISPATCHER.md and docs/ADAPTERS.md. Never return raw stderr or
+        credentials in responses, metadata, failure details, or diagnostics.
+    - path: "config/dispatcher.json"
+      instructions: >-
+        Preserve the standard formatting produced by json.dumps(indent=2,
+        ensure_ascii=False). Reject credential-related option names and values.
+    - path: "tests/**"
+      instructions: >-
+        Keep tests offline with no network access. Use temporary directories
+        and an isolated HOME; never read or write the real HOME.
+    - path: "docs/**"
+      instructions: >-
+        Check documentation against actual code behavior and protocol semantics.
+        Keep related content in README.md and README.zh-CN.md synchronized.
+    - path: "README*.md"
+      instructions: >-
+        Check instructions and examples against actual code behavior. Keep
+        README.md and README.zh-CN.md synchronized in content.
+    - path: "**"
+      instructions: >-
+        Keep the project provider-neutral and general-purpose. Do not introduce
+        specific AI vendor or product names, vendor-specific logic, or private
+        infrastructure references. Reject personal information and machine-local
+        absolute paths.
+chat:
+  auto_reply: true
