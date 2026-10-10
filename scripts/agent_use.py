@@ -8,7 +8,7 @@ import signal
 import sys
 import tempfile
 
-from dispatcher_config import ConfigError, ProviderDisabled, disabled_status, catalog, fields, load_config, resolve
+from dispatcher_config import ConfigError, ProviderDisabled, disabled_status, catalog, fields, load_config, resolve, resolve_config_path
 from run_agent import RouteError, interrupted, run
 
 REQUEST_FIELDS = {"version", "task", "output", "profile", "providers", "models", "timeout", "expect_exact", "require_no_tools"}
@@ -48,7 +48,8 @@ def main():
     args = parser.parse_args()
     try:
         if args.action == "list":
-            print(json.dumps(catalog(load_config(args.config)), ensure_ascii=False))
+            config_path = resolve_config_path(args.config)
+            print(json.dumps({**catalog(load_config(config_path)), "config_path": str(config_path)}, ensure_ascii=False))
             return 0
         if args.request == "-":
             raw = sys.stdin.buffer.read(4 * 1024 * 1024 + 1)

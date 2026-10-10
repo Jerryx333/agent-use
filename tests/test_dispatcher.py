@@ -29,6 +29,9 @@ class DispatcherTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
+        environment = mock.patch.dict(os.environ, HOME=str(self.root), AGENT_USE_CONFIG="")
+        environment.start()
+        self.addCleanup(environment.stop)
         self.config = config.load_config()
         self.config["providers"]["second"] = copy.deepcopy(self.config["providers"]["echo"])
         self.config["providers"]["disabled-demo"] = {**copy.deepcopy(self.config["providers"]["echo"]), "enabled": False}

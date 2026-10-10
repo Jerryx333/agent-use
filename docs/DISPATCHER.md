@@ -65,8 +65,8 @@ both declarations.
 
 Option names use the same syntax as provider names; names suggesting secrets
 are rejected. Values may be strings, booleans, integers, or finite floats.
-Never put credentials in registry options. `{python}` and `{repo}` substitutions
-are supported in command arguments. Relative command paths resolve against the
+Never put credentials in registry options. `{python}`, `{repo}`, and `{config_dir}`
+substitutions are supported in command arguments. Relative command paths resolve against the
 caller's working directory, not the registry directory.
 
 To wrap a local CLI, register `command` as
@@ -84,6 +84,35 @@ Timeout precedence is request timeout, route timeout, then registry default.
 Options merge registry defaults and route overrides, then file-CLI overrides.
 Disabled providers are skipped in profiles; explicitly requesting one fails
 with `provider_disabled`. No enabled routes also produces that failure.
+
+## Private adapters
+
+Keep your adapters and registry in a separate directory or private repository,
+for example `~/my-adapters/`. In that registry, use a command such as
+`["{python}", "-B", "{config_dir}/adapter.py"]` to reference your adapter.
+`{config_dir}` expands in each command argument to the real directory containing
+the registry, after resolving symlinks. `{python}` and `{repo}` remain available.
+
+Select the registry with:
+
+```bash
+export AGENT_USE_CONFIG="$HOME/my-adapters/dispatcher.json"
+python3 -B scripts/agent_use.py list
+```
+
+Alternatively, create a symlink at the default user location:
+
+```bash
+mkdir -p "$HOME/.config/agent-use"
+ln -s "$HOME/my-adapters/dispatcher.json" "$HOME/.config/agent-use/dispatcher.json"
+```
+
+Both entry points use this lookup order: explicit `--config PATH`, nonempty
+`AGENT_USE_CONFIG` (with `~` expansion), `~/.config/agent-use/dispatcher.json`,
+then the bundled `config/dispatcher.json`. An empty environment variable is
+ignored. A selected missing or unreadable registry is an error, with no fallback;
+a broken symlink at the user location is also an error. `agent_use.py list`
+includes `config_path`, the resolved absolute registry path, for troubleshooting.
 
 ## Adapter protocol
 

@@ -141,3 +141,5 @@ bash scripts/test.sh
 For a new adapter, also exercise failure responses, malformed output, timeouts,
 interruption, and child cleanup. Use fresh output directories after changing
 dependencies or runtime environment; validation alone is not an execution test.
+
+For registries outside this repository, see [Private adapters](DISPATCHER.md#private-adapters).

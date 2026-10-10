@@ -45,6 +45,33 @@ SKILLS_DIR="$HOME/.agents/skills" bash scripts/install.sh
 `{python}` 和 `{repo}` 分别展开为当前解释器和仓库根目录。
 完整字段、状态与失败语义见 [协议文档](docs/DISPATCHER.md)。
 
+## 私有适配器
+
+把适配器和注册表放在仓库之外的独立目录或私有仓库，例如 `~/my-adapters/`。
+在注册表中使用 `["{python}", "-B", "{config_dir}/adapter.py"]` 引用适配器。
+`{config_dir}` 在每个命令参数中展开为注册表解析软链后的真实所在目录；
+现有 `{python}` 和 `{repo}` 仍然可用。
+
+通过环境变量指定注册表：
+
+```bash
+export AGENT_USE_CONFIG="$HOME/my-adapters/dispatcher.json"
+python3 -B scripts/agent_use.py list
+```
+
+也可以在默认用户位置创建软链：
+
+```bash
+mkdir -p "$HOME/.config/agent-use"
+ln -s "$HOME/my-adapters/dispatcher.json" "$HOME/.config/agent-use/dispatcher.json"
+```
+
+两个入口的查找顺序相同：显式 `--config PATH` → 非空 `AGENT_USE_CONFIG`
+（展开 `~`）→ `~/.config/agent-use/dispatcher.json` → 仓库自带 `config/dispatcher.json`。
+环境变量为空时忽略；选中的注册表缺失或不可读就报错，不回退。
+默认用户位置是断开的软链时也报错，不回退。
+`agent_use.py list` 的 `config_path` 返回解析后的绝对路径，便于排查。
+
 ## 信任模型（Trust model）
 
 调度器不获取、保存或管理凭据；认证由适配器负责。任务、配置和输出中不要放秘密。

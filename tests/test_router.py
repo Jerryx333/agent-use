@@ -5,6 +5,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -21,6 +22,9 @@ class RouterTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
+        environment = mock.patch.dict(os.environ, HOME=str(self.root), AGENT_USE_CONFIG="")
+        environment.start()
+        self.addCleanup(environment.stop)
         self.task = self.root / "task.txt"
         self.task.write_text("Small draft", encoding="utf-8")
         self.output = self.root / "run"

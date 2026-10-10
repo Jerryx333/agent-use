@@ -3,6 +3,7 @@
 import copy
 import json
 import math
+import os
 from pathlib import Path
 import re
 import sys
@@ -98,8 +99,30 @@ def read_json(path):
         fail("unreadable or invalid JSON file")
 
 
+def resolve_config_path(path=None):
+    """Select one registry, without falling back when the selected file fails."""
+    try:
+        if path is None:
+            path = os.environ.get("AGENT_USE_CONFIG")
+            if not path:
+                candidate = Path("~/.config/agent-use/dispatcher.json").expanduser()
+                try:
+                    candidate.lstat()
+                except FileNotFoundError:
+                    path = DEFAULT_CONFIG
+                else:
+                    path = candidate
+        resolved = Path(path).expanduser().resolve(strict=True)
+        with resolved.open("rb"):
+            pass
+        return resolved
+    except (OSError, ValueError, RuntimeError):
+        fail("unreadable registry file")
+
+
 def load_config(path=None):
-    config = read_json(path or DEFAULT_CONFIG)
+    config_path = resolve_config_path(path)
+    config = read_json(config_path)
     fields(config, {"version", "default_profile", "providers", "profiles"}, "config")
     if type(config.get("version")) is not int or config["version"] != 1:
         fail("config version must be 1")
@@ -135,6 +158,8 @@ def load_config(path=None):
             fail("models must be an array")
         for model in specification.get("models", []):
             model_name(model)
+        specification["command"] = [part.replace("{config_dir}", str(config_path.parent))
+                                    for part in command]
     for name, profile in profiles.items():
         if not isinstance(name, str) or not NAME.fullmatch(name):
             fail("invalid profile name")
