@@ -178,14 +178,9 @@ after resolving symlinks. `{python}` and `{repo}` remain available. See
 
 ## Use with ai-harness
 
-[ai-harness](https://github.com/Sean529/ai-harness) is a multi-model task delegation
-layer. Its text seats (named delegation targets) call agent-use through
-`$AGENT_USE_HOME/scripts/run_agent.py`. Set `AGENT_USE_HOME` to your agent-use
-checkout and declare each seat's `provider` under `kind: "agent_use"` in
-ai-harness's local configuration, `~/.config/aiw/seats.local.json`. The provider
-must match a name in the effective agent-use registry. ai-harness's `aiw doctor`
-checks whether enabled seats reference registered, enabled providers and warns
-about mismatches. See its documentation for the complete seat configuration.
+[ai-harness](https://github.com/Sean529/ai-harness) is a companion project that uses
+agent-use to power its text seats. See the ai-harness README for configuration
+instructions.
 
 ## Trust model
 

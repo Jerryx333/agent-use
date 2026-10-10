@@ -160,13 +160,8 @@ printf '%s' '{"version":1,"task":"hello","profile":"local","expect_exact":"HELLO
 
 ## 与 ai-harness 一起用
 
-[ai-harness](https://github.com/Sean529/ai-harness) 是多模型派单层。
-它的文本座位（有名字的派单目标）通过 `$AGENT_USE_HOME/scripts/run_agent.py`
-调用 agent-use。把 `AGENT_USE_HOME` 设为 agent-use 的本地仓库目录，在 ai-harness
-本地配置 `~/.config/aiw/seats.local.json` 中为 `kind: "agent_use"` 的座位声明
-`provider`，其值必须对应生效注册表中的提供方名称。ai-harness 的 `aiw doctor`
-会检查启用座位引用的提供方是否已注册且启用，不匹配时给出警告。
-完整座位配置请查阅 ai-harness 文档。
+[ai-harness](https://github.com/Sean529/ai-harness) 是一个使用 agent-use 驱动其文本座位的配套项目。
+配置方法见 ai-harness 的 README。
 
 ## 安全模型（Trust model）
 
