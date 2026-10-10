@@ -143,3 +143,10 @@ interruption, and child cleanup. Use fresh output directories after changing
 dependencies or runtime environment; validation alone is not an execution test.
 
 For registries outside this repository, see [Private adapters](DISPATCHER.md#private-adapters).
+
+Registry precedence is `--config` > nonempty `AGENT_USE_CONFIG` >
+`${XDG_CONFIG_HOME:-~/.config}/agent-use/dispatcher.json` > bundled registry.
+Only a nonempty, absolute `XDG_CONFIG_HOME` is used; otherwise use `~/.config`.
+A missing explicit or environment-selected registry, or a broken user-registry
+symlink, is an error without fallback. An absent user registry uses the bundled
+registry. `XDG_CONFIG_HOME` is only for discovery, not the subprocess allowlist.

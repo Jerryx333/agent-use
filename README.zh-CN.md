@@ -43,7 +43,8 @@ SKILLS_DIR="$HOME/.agents/skills" bash scripts/install.sh
 在注册表中声明 argv 形式的 `command`、`default_model`、可覆盖的 `options`
 以及可选 `env_prefixes` 和 `env_names`，再加入 profile。通过 `--config` 可使用独立注册表。
 `{python}` 和 `{repo}` 分别展开为当前解释器和仓库根目录。
-完整字段、状态与失败语义见 [协议文档](docs/DISPATCHER.md)。
+完整字段、状态与失败语义见 [协议文档](docs/DISPATCHER.md)，
+失败分类见 [reason 词表](docs/DISPATCHER.md#reason-codes)。
 
 ## 私有适配器
 
@@ -67,8 +68,10 @@ ln -s "$HOME/my-adapters/dispatcher.json" "$HOME/.config/agent-use/dispatcher.js
 ```
 
 两个入口的查找顺序相同：显式 `--config PATH` → 非空 `AGENT_USE_CONFIG`
-（展开 `~`）→ `~/.config/agent-use/dispatcher.json` → 仓库自带 `config/dispatcher.json`。
-环境变量为空时忽略；选中的注册表缺失或不可读就报错，不回退。
+（展开 `~`）→ `${XDG_CONFIG_HOME:-~/.config}/agent-use/dispatcher.json` → 仓库自带 `config/dispatcher.json`。
+仅在 `XDG_CONFIG_HOME` 非空且为绝对路径时采用，否则忽略并使用 `~/.config`。
+`XDG_CONFIG_HOME` 只用于查找注册表，不加入子进程环境白名单。
+`AGENT_USE_CONFIG` 为空时忽略；选中的注册表缺失或不可读就报错，不回退。
 默认用户位置是断开的软链时也报错，不回退。
 `agent_use.py list` 的 `config_path` 返回解析后的绝对路径，便于排查。
 

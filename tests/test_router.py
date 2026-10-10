@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import importlib.util
 import io
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -42,6 +43,46 @@ class RouterTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             return router.run(self.args)
 
+
+    def test_status_versions_cover_failed_and_successful_attempts(self):
+        def attempt(provider, *arguments):
+            if provider == "first":
+                return {"provider": provider, "state": "failed", "reason": "timeout"}, None, False
+            return {"provider": provider, "state": "staged_for_review"}, "draft", False
+        with mock.patch.object(router, "attempt", side_effect=attempt):
+            status = self.execute()
+        for name, sha in status["scheduler_versions"].items():
+            self.assertNotIn("/", name)
+            self.assertEqual(sha, hashlib.sha256((SCRIPT.parent / name).read_bytes()).hexdigest())
+        adapter = SCRIPT.parents[1] / "examples/echo_adapter.py"
+        for record in status["attempts"]:
+            versions = record["adapter_versions"]
+            self.assertEqual(versions["examples/echo_adapter.py"], hashlib.sha256(adapter.read_bytes()).hexdigest())
+            self.assertTrue(all(not Path(key).is_absolute() for key in versions))
+        self.assertEqual(status, json.loads((self.output / "status.json").read_text()) | {"order": status["order"]})
+        # Simulate an older successful status: reuse must not backfill fields.
+        del status["scheduler_versions"]
+        for record in status["attempts"]:
+            del record["adapter_versions"]
+        router.write_status(self.output, status)
+        with mock.patch.object(router, "attempt") as called:
+            replay = self.execute()
+        called.assert_not_called()
+        self.assertNotIn("scheduler_versions", replay)
+        self.assertTrue(all("adapter_versions" not in record for record in replay["attempts"]))
+
+    def test_version_keys_are_portable(self):
+        config_dir = self.root.resolve() / "registry"
+        config_dir.mkdir()
+        self.assertEqual(router.version_key(SCRIPT, config_dir), "scripts/run_agent.py")
+        self.assertEqual(router.version_key(config_dir / "adapter.py", config_dir), "config:adapter.py")
+        self.assertEqual(router.version_key(config_dir / "../scripts/x.py", config_dir), "config:../scripts/x.py")
+        self.assertEqual(router.version_key(self.root / "external.py", config_dir), "external.py")
+        # Core ownership wins even if the registry also contains the source.
+        self.assertEqual(router.version_key(SCRIPT, SCRIPT.parent), "scripts/run_agent.py")
+        link = config_dir / "linked.py"
+        link.symlink_to(SCRIPT)
+        self.assertEqual(router.version_key(link, config_dir), "scripts/run_agent.py")
 
     def test_non_object_existing_status_is_rejected(self):
         self.output.mkdir()

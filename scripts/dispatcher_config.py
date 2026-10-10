@@ -1,6 +1,7 @@
 # Validate registries and resolve model, profile, timeout, and tool requirements.
 
 import copy
+import hashlib
 import json
 import math
 import os
@@ -105,7 +106,9 @@ def resolve_config_path(path=None):
         if path is None:
             path = os.environ.get("AGENT_USE_CONFIG")
             if not path:
-                candidate = Path("~/.config/agent-use/dispatcher.json").expanduser()
+                xdg = os.environ.get("XDG_CONFIG_HOME", "")
+                base = Path(xdg) if xdg and Path(xdg).is_absolute() else Path("~/.config").expanduser()
+                candidate = base / "agent-use/dispatcher.json"
                 try:
                     candidate.lstat()
                 except FileNotFoundError:
@@ -230,10 +233,17 @@ def catalog(config):
                 for name, specification in config["providers"].items()]}
 
 
+def scheduler_versions():
+    """Hash the same core sources used by the request fingerprint."""
+    return {name: hashlib.sha256((REPO_ROOT / "scripts" / name).read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+            for name in ("run_agent.py", "dispatcher_config.py", "provider_process.py")}
+
+
 def disabled_status(output):
     """Persist a rejected request without overwriting an existing run."""
     status = {"protocol_version": 1, "state": "failed", "accepted": False,
-              "reason": "provider_disabled", "fatal": False, "attempts": []}
+              "reason": "provider_disabled", "fatal": False, "attempts": [],
+              "scheduler_versions": scheduler_versions()}
     directory = Path(output).expanduser().resolve()
     directory.mkdir(parents=True, mode=0o700, exist_ok=False)
     (directory / "status.json").write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

@@ -19,7 +19,7 @@ class ConfigPathTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.home = Path(temporary.name)
-        environment = mock.patch.dict(os.environ, HOME=str(self.home), AGENT_USE_CONFIG="")
+        environment = mock.patch.dict(os.environ, HOME=str(self.home), AGENT_USE_CONFIG="", XDG_CONFIG_HOME="")
         environment.start()
         self.addCleanup(environment.stop)
         self.user_config = self.home / ".config/agent-use/dispatcher.json"
@@ -44,6 +44,34 @@ class ConfigPathTests(unittest.TestCase):
         self.assertEqual(config.resolve_config_path(config.DEFAULT_CONFIG), config.DEFAULT_CONFIG.resolve())
         with self.assertRaises(config.ConfigError):
             config.load_config(self.home / "explicit-missing.json")
+
+    def test_xdg_lookup_precedence_and_invalid_values(self):
+        xdg = self.home / "xdg"
+        candidate = xdg / "agent-use/dispatcher.json"
+        candidate.parent.mkdir(parents=True)
+        self.user_config.write_bytes(self.registry.read_bytes())
+        os.environ["XDG_CONFIG_HOME"] = str(xdg)
+        # An absent XDG registry skips the legacy home location.
+        self.assertEqual(config.resolve_config_path(), config.DEFAULT_CONFIG.resolve())
+        candidate.write_bytes(self.registry.read_bytes())
+        self.assertEqual(config.resolve_config_path(), candidate.resolve())
+        reply = self.cli("agent_use.py", "list")
+        self.assertEqual(json.loads(reply.stdout)["config_path"], str(candidate.resolve()))
+        os.environ["AGENT_USE_CONFIG"] = str(self.registry)
+        self.assertEqual(config.resolve_config_path(), self.registry.resolve())
+        self.assertEqual(config.resolve_config_path(config.DEFAULT_CONFIG), config.DEFAULT_CONFIG.resolve())
+        os.environ["AGENT_USE_CONFIG"] = ""
+        for value in ("", "relative/path", "~/xdg"):
+            os.environ["XDG_CONFIG_HOME"] = value
+            self.assertEqual(config.resolve_config_path(), self.user_config.resolve())
+
+    def test_broken_xdg_registry_symlink_is_error(self):
+        os.environ["XDG_CONFIG_HOME"] = str(self.home / "xdg")
+        candidate = self.home / "xdg/agent-use/dispatcher.json"
+        candidate.parent.mkdir(parents=True)
+        candidate.symlink_to(self.home / "missing.json")
+        with self.assertRaises(config.ConfigError):
+            config.resolve_config_path()
 
     def test_missing_environment_config_never_falls_back(self):
         self.user_config.write_bytes(self.registry.read_bytes())
@@ -87,7 +115,9 @@ class ConfigPathTests(unittest.TestCase):
         task.write_text("hello")
         result = self.cli("run_agent.py", task, self.home / "result", "--expect-exact", "echo: hello")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["state"], "staged_for_review")
+        status = json.loads(result.stdout)
+        self.assertEqual(status["state"], "staged_for_review")
+        self.assertIn("config:adapter.py", status["attempts"][0]["adapter_versions"])
         self.user_config.unlink()
         os.environ["AGENT_USE_CONFIG"] = "~/my-adapters/dispatcher.json"
         result = self.cli("run_agent.py", task, self.home / "env-result", "--expect-exact", "echo: hello")

@@ -13,7 +13,7 @@ import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from dispatcher_config import ConfigError, ProviderDisabled, dangerous_environment_name, disabled_status, load_config, resolve
+from dispatcher_config import ConfigError, ProviderDisabled, dangerous_environment_name, disabled_status, load_config, resolve, resolve_config_path, scheduler_versions as core_versions
 from provider_process import ProcessError, invoke
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -159,6 +159,17 @@ def apply_options(routes, values):
         selected[provider]["options"][key] = content
 
 
+def version_key(source, config_dir):
+    """Describe command files without publishing machine-specific absolute paths."""
+    source = Path(source)
+    resolved = source.resolve()
+    if resolved.is_relative_to(REPO_ROOT):
+        return resolved.relative_to(REPO_ROOT).as_posix()
+    if source.absolute().is_relative_to(config_dir) or resolved.is_relative_to(config_dir):
+        return "config:" + Path(os.path.relpath(resolved, config_dir)).as_posix()
+    return resolved.name
+
+
 def run(args):
     order = getattr(args, "order", None)
     requested = getattr(args, "providers", None)
@@ -167,7 +178,8 @@ def run(args):
             raise RouteError("order and providers are mutually exclusive")
         requested = order.split(",")
     try:
-        routes = resolve(load_config(getattr(args, "config", None)), profile=getattr(args, "profile", None),
+        config_path = resolve_config_path(getattr(args, "config", None))
+        routes = resolve(load_config(config_path), profile=getattr(args, "profile", None),
             requested=requested, models=getattr(args, "models", None), timeout=args.timeout,
             require_no_tools=getattr(args, "require_no_tools", False))
     except ProviderDisabled:
@@ -186,8 +198,7 @@ def run(args):
         adapter_versions[provider] = {
             str(source): hashlib.sha256(source.read_bytes()).hexdigest()
             for source in sorted(set(sources)) if source.is_file()}
-    scheduler_versions = {source.name: digest(source.read_text(encoding="utf-8")) for source in
-        (Path(__file__), Path(__file__).with_name("dispatcher_config.py"), Path(__file__).with_name("provider_process.py"))}
+    scheduler_versions = core_versions()
     fingerprint = digest(json.dumps({"prompt": prompt, "routes": routes, "cwd": str(Path.cwd().resolve()),
                                      "expected": args.expect_exact,
                                      "adapter_versions": adapter_versions, "scheduler_versions": scheduler_versions}, sort_keys=True))
@@ -199,12 +210,15 @@ def run(args):
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise RouteError("output directory is in use by another invocation") from None
-        return execute(args, prompt, routes, providers, fingerprint, output)
+        status_versions = {provider: {version_key(source, config_path.parent): sha
+                                      for source, sha in versions.items()}
+                           for provider, versions in adapter_versions.items()}
+        return execute(args, prompt, routes, providers, fingerprint, output, scheduler_versions, status_versions)
     finally:
         os.close(descriptor)
 
 
-def execute(args, prompt, routes, providers, fingerprint, output):
+def execute(args, prompt, routes, providers, fingerprint, output, scheduler_versions, adapter_versions):
     if output.exists():
         status = json.loads((output / "status.json").read_text(encoding="utf-8"))
         if not isinstance(status, dict) or status.get("state") != "staged_for_review" or status.get("accepted") is not False or status.get("request_sha256") != fingerprint:
@@ -215,7 +229,7 @@ def execute(args, prompt, routes, providers, fingerprint, output):
         return status
     output.mkdir(parents=True, mode=0o700)
     status = {"protocol_version": 1, "state": "running", "accepted": False, "request_sha256": fingerprint,
-              "order": providers, "attempts": []}
+              "order": providers, "attempts": [], "scheduler_versions": scheduler_versions}
     write_status(output, status)
     task = output / "task.txt"
     try:
@@ -228,6 +242,7 @@ def execute(args, prompt, routes, providers, fingerprint, output):
             write_status(output, status)
             print(f"agent-use: invoking {provider}", file=sys.stderr)
             record, content, fatal = attempt(provider, task, attempts / provider, route["timeout"], args.expect_exact, route)
+            record["adapter_versions"] = adapter_versions[provider]
             status["attempts"].append(record)
             if content is not None:
                 (output / "response.txt").write_text(content, encoding="utf-8")

@@ -55,7 +55,8 @@ Register an argv `command`, a `default_model`, and optional settings in
 `{python}` and `{repo}` expand to the current interpreter and repository root.
 Declare overridable keys in `options` and any additional environment prefixes
 in `env_prefixes` or exact names in `env_names`. Add the provider to a profile to select it.
-See [the full protocol](docs/DISPATCHER.md) for validation and failure semantics.
+See [the full protocol](docs/DISPATCHER.md) for validation and failure semantics,
+and [Reason codes](docs/DISPATCHER.md#reason-codes) for failure classification.
 
 ## Private adapters
 
@@ -80,9 +81,12 @@ ln -s "$HOME/my-adapters/dispatcher.json" "$HOME/.config/agent-use/dispatcher.js
 ```
 
 Both entry points use this lookup order: explicit `--config PATH`, nonempty
-`AGENT_USE_CONFIG` (with `~` expansion), `~/.config/agent-use/dispatcher.json`,
-then the bundled `config/dispatcher.json`. An empty environment variable is
-ignored. A selected missing or unreadable registry is an error, with no fallback;
+`AGENT_USE_CONFIG` (with `~` expansion), the user registry at
+`${XDG_CONFIG_HOME:-~/.config}/agent-use/dispatcher.json`, then the bundled
+`config/dispatcher.json`. Use `XDG_CONFIG_HOME` only when nonempty and absolute;
+otherwise ignore it and use `~/.config`. An empty `AGENT_USE_CONFIG` is ignored.
+`XDG_CONFIG_HOME` only selects the registry; it is not added to the subprocess
+allowlist. A selected missing or unreadable registry is an error, with no fallback;
 a broken symlink at the user location is also an error. `agent_use.py list`
 includes `config_path`, the resolved absolute registry path, for troubleshooting.
 
