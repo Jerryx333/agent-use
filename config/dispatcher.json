@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "default_profile": "default",
+  "providers": {
+    "echo": {
+      "command": [
+        "{python}",
+        "-B",
+        "{repo}/examples/echo_adapter.py"
+      ],
+      "enabled": true,
+      "default_model": "echo-1",
+      "timeout": 60,
+      "options": {
+        "prefix": "echo: "
+      },
+      "tool_policy": "disabled",
+      "env_prefixes": []
+    },
+    "fail-demo": {
+      "command": [
+        "{python}",
+        "-B",
+        "{repo}/examples/fail_adapter.py"
+      ],
+      "enabled": true,
+      "default_model": "fail-1",
+      "timeout": 60,
+      "options": {},
+      "tool_policy": "disabled",
+      "env_prefixes": []
+    },
+    "upper": {
+      "command": [
+        "{python}",
+        "-B",
+        "{repo}/examples/cli_adapter.py",
+        "--",
+        "tr",
+        "a-z",
+        "A-Z"
+      ],
+      "default_model": "upper-1",
+      "timeout": 60,
+      "tool_policy": "disabled"
+    }
+  },
+  "profiles": {
+    "default": [
+      "echo"
+    ],
+    "fallback-demo": [
+      "fail-demo",
+      "echo"
+    ],
+    "text-safe": [
+      "echo"
+    ],
+    "cli-demo": [
+      "upper"
+    ]
+  }
+}
