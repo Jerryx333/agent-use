@@ -65,8 +65,9 @@ python3 -B scripts/agent_use.py list
 也可以在默认用户位置创建软链：
 
 ```bash
-mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/agent-use"
-ln -sfn "$HOME/my-adapters/dispatcher.json" "${XDG_CONFIG_HOME:-$HOME/.config}/agent-use/dispatcher.json"
+case "${XDG_CONFIG_HOME:-}" in /*) config_home="$XDG_CONFIG_HOME" ;; *) config_home="$HOME/.config" ;; esac
+mkdir -p "$config_home/agent-use"
+ln -sfn "$HOME/my-adapters/dispatcher.json" "$config_home/agent-use/dispatcher.json"
 ```
 
 两个入口的查找顺序相同：显式 `--config PATH` → 非空 `AGENT_USE_CONFIG`

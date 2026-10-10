@@ -105,8 +105,9 @@ Only a nonempty, absolute `XDG_CONFIG_HOME` is used; otherwise use `~/.config`.
 Alternatively, create a symlink at the default user location:
 
 ```bash
-mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/agent-use"
-ln -sfn "$HOME/my-adapters/dispatcher.json" "${XDG_CONFIG_HOME:-$HOME/.config}/agent-use/dispatcher.json"
+case "${XDG_CONFIG_HOME:-}" in /*) config_home="$XDG_CONFIG_HOME" ;; *) config_home="$HOME/.config" ;; esac
+mkdir -p "$config_home/agent-use"
+ln -sfn "$HOME/my-adapters/dispatcher.json" "$config_home/agent-use/dispatcher.json"
 ```
 
 Both entry points use this lookup order: explicit `--config PATH`, nonempty
