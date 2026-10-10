@@ -23,7 +23,7 @@ agent-use 是给 AI 编程助手及其工作流开发者用的统一调度入口
 克隆仓库，之后所有命令都在仓库根目录运行：
 
 ```bash
-git clone https://github.com/Sean529/agent-use.git
+git clone https://github.com/Jerryx333/agent-use.git
 cd agent-use
 python3 -B scripts/agent_use.py list --config config/dispatcher.json
 ```
@@ -160,7 +160,7 @@ printf '%s' '{"version":1,"task":"hello","profile":"local","expect_exact":"HELLO
 
 ## 与 ai-harness 一起用
 
-[ai-harness](https://github.com/Sean529/ai-harness) 是一个使用 agent-use 驱动其文本座位的配套项目。
+[ai-harness](https://github.com/Jerryx333/ai-harness) 是一个使用 agent-use 驱动其文本座位的配套项目。
 配置方法见 ai-harness 的 README。
 
 ## 安全模型（Trust model）

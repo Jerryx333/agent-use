@@ -28,7 +28,7 @@ the clone step.
 Clone the repository, then run all subsequent commands from its root:
 
 ```bash
-git clone https://github.com/Sean529/agent-use.git
+git clone https://github.com/Jerryx333/agent-use.git
 cd agent-use
 python3 -B scripts/agent_use.py list --config config/dispatcher.json
 ```
@@ -178,7 +178,7 @@ after resolving symlinks. `{python}` and `{repo}` remain available. See
 
 ## Use with ai-harness
 
-[ai-harness](https://github.com/Sean529/ai-harness) is a companion project that uses
+[ai-harness](https://github.com/Jerryx333/ai-harness) is a companion project that uses
 agent-use to power its text seats. See the ai-harness README for configuration
 instructions.
 
