@@ -94,11 +94,19 @@ class CliAdapterTests(unittest.TestCase):
                  'fcntl.flock(lock, fcntl.LOCK_EX); '
                  f'p=Path({str(pid_file)!r}); t=p.with_suffix(".tmp"); '
                  't.write_text(str(os.getpid())); t.replace(p); signal.pause()')
-        source = ('import subprocess,sys,signal; '
-                  f'subprocess.Popen([sys.executable,"-B","-c",{child!r}]); '
+        source = ('import subprocess,sys,signal,time\n'
+                  'from pathlib import Path\n'
+                  f'subprocess.Popen([sys.executable,"-B","-c",{child!r}])\n'
+                  f'pid_file = Path({str(pid_file)!r})\n'
+                  'deadline = time.monotonic() + 1.8\n'
+                  'while not pid_file.exists():\n'
+                  '    remaining = deadline - time.monotonic()\n'
+                  '    if remaining <= 0:\n'
+                  '        raise SystemExit("descendant did not publish PID")\n'
+                  '    time.sleep(min(.02, remaining))\n'
                   'signal.pause()')
         try:
-            reply = self.python(source, timeout=.5)
+            reply = self.python(source, timeout=2)
             self.assertEqual(reply['reason'], 'timeout')
             self.assertTrue(pid_file.exists())  # Published only after taking the lock.
             with lock_file.open('r') as lock:
