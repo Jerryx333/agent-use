@@ -158,10 +158,10 @@ printf '%s' '{"version":1,"task":"hello","profile":"local","expect_exact":"HELLO
 `{config_dir}` 是注册表解析软链后的真实所在目录，`{python}` 和 `{repo}` 仍然可用。
 详见[协议中的私有适配器说明](docs/DISPATCHER.md#private-adapters)。
 
-## 与 ai-harness 一起用
+## 与 aiw 一起用
 
-[ai-harness](https://github.com/Jerryx333/ai-harness) 是一个使用 agent-use 驱动其文本座位的配套项目。
-配置方法见 ai-harness 的 README。
+[aiw](https://github.com/Jerryx333/aiw) 是一个使用 agent-use 驱动其文本座位的配套项目。
+配置方法见 aiw 的 README。
 
 ## 安全模型（Trust model）
 

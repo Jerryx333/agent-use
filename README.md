@@ -176,10 +176,10 @@ to a private adapter. `{config_dir}` is the registry's real containing directory
 after resolving symlinks. `{python}` and `{repo}` remain available. See
 [Private adapters in the protocol](docs/DISPATCHER.md#private-adapters).
 
-## Use with ai-harness
+## Use with aiw
 
-[ai-harness](https://github.com/Jerryx333/ai-harness) is a companion project that uses
-agent-use to power its text seats. See the ai-harness README for configuration
+[aiw](https://github.com/Jerryx333/aiw) is a companion project that uses
+agent-use to power its text seats. See the aiw README for configuration
 instructions.
 
 ## Trust model
