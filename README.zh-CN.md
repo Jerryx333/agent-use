@@ -185,4 +185,4 @@ bash scripts/test.sh
 ```
 
 改动通过 PR 提交。贡献应保持厂商无关，并遵守 [CONTRIBUTING.md](CONTRIBUTING.md)。
-许可证为 [MIT](LICENSE)。
+许可证为 [Apache-2.0](LICENSE)。

@@ -207,4 +207,4 @@ bash scripts/test.sh
 ```
 
 Submit changes through a pull request. Keep contributions provider-neutral and
-follow [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under [MIT](LICENSE).
+follow [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under [Apache-2.0](LICENSE).
