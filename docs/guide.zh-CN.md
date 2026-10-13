@@ -45,7 +45,7 @@ cat runs/hello/status.json
 
 README 中的 `tr` 示例，`list`、`validate`、`run` 三个命令的退出码都为 0：`list` 列出 `my-cli`，`validate` 返回 `"state": "valid"`，`run` 返回 `"response": "HELLO"` 和 `accepted: false`。校验只检查注册表和请求，不启动命令，也不检查程序是否可用、认证是否成功或实际运行行为。
 
-接入模型时，把 `tr`、`a-z`、`A-Z` 换成已安装 CLI 的可执行程序和真实参数，把 `default_model` 换成模型标识。`--` 后的所有参数都属于目标 CLI。包装器把任务文本送入 stdin，把非空白的 UTF-8 stdout 作为回复，丢弃 stderr。每个参数中的 `{model}` 和 `{task_file}` 都只替换一遍，因此接受文件输入的 CLI 可以拿到任务文件路径。不进行 shell 展开，也不会把 `options` 自动转成 CLI 参数。认证使用 CLI 自己的机制；需要额外环境变量时，在注册表的 `env_names` 或 `env_prefixes` 中声明。详见[CLI 接入指南](ADAPTERS.md#quick-integration-with-a-local-cli)。
+接入模型时，把 `tr`、`a-z`、`A-Z` 换成已安装 CLI 的可执行程序和真实参数，把 `default_model` 换成模型标识。`--` 后的所有参数都属于目标 CLI。包装器把任务文本送入 stdin，把非空白的 UTF-8 stdout 作为回复，丢弃 stderr。每个参数中出现的 `{model}` 和 `{task_file}` 都会被替换，且只替换一遍（替换进去的内容不会再展开），因此接受文件输入的 CLI 可以拿到任务文件路径。不进行 shell 展开，也不会把 `options` 自动转成 CLI 参数。认证使用 CLI 自己的机制；需要额外环境变量时，在注册表的 `env_names` 或 `env_prefixes` 中声明。详见[CLI 接入指南](ADAPTERS.md#quick-integration-with-a-local-cli)。
 
 `{python}` 是当前 Python 解释器，`{repo}` 是 agent-use 仓库根目录。
 

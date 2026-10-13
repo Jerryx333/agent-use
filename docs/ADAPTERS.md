@@ -86,8 +86,8 @@ The shipped `upper` registration uses this command and belongs to `cli-demo`:
 ```
 
 The registry expands `{python}` and `{repo}`. Arguments after `--` belong to the
-target command. The wrapper substitutes `{model}` and `{task_file}` literally,
-once per argument, without shell evaluation. For example, a local executable
+target command. The wrapper replaces every occurrence of `{model}` and `{task_file}` in each argument
+literally, in a single pass, without shell evaluation. For example, a local executable
 that accepts these flags could use:
 
 ```json
