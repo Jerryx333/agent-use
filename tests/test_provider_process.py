@@ -48,8 +48,8 @@ class ProviderProcessTests(unittest.TestCase):
     def test_stop_ignores_repeated_interrupts_and_restores_handlers(self):
         previous = {sig: signal.getsignal(sig) for sig in (signal.SIGTERM, signal.SIGINT)}
         process = subprocess.Popen([sys.executable, "-B", "-c",
-            'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); '
-            'print("ready", flush=True); time.sleep(30)'],
+            'import signal; signal.signal(signal.SIGTERM, signal.SIG_IGN); '
+            'print("ready", flush=True); signal.pause()'],
             stdout=subprocess.PIPE, start_new_session=True)
         sleep = time.sleep
 
@@ -74,7 +74,7 @@ class ProviderProcessTests(unittest.TestCase):
             process.stdout.close()
 
     def test_stop_reaps_child(self):
-        process = subprocess.Popen([sys.executable, "-B", "-c", "import time; time.sleep(30)"], start_new_session=True)
+        process = subprocess.Popen([sys.executable, "-B", "-c", "import signal; signal.pause()"], start_new_session=True)
         try:
             provider_process.stop(process)
             self.assertIsNotNone(process.returncode)

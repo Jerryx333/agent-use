@@ -12,9 +12,10 @@ import signal
 import subprocess
 import sys
 import tempfile
-import time
 import unittest
 from unittest import mock
+
+from support import wait_until
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -515,12 +516,12 @@ class DispatcherTests(unittest.TestCase):
             provider_process.invoke(self.fake(success), {}, 3)
         self.assertEqual(raised.exception.category, 'adapter_failed')
         with self.assertRaises(provider_process.ProcessError) as raised:
-            provider_process.invoke(self.fake('import time\ntime.sleep(10)'), {'task': 'x' * 200000}, .3)
+            provider_process.invoke(self.fake('import signal\nsignal.pause()'), {'task': 'x' * 200000}, .3)
         self.assertEqual(raised.exception.category, 'timeout')
 
 
     def test_process_timeout_invalid_json_and_output_limit(self):
-        for source, category in [('import time\ntime.sleep(10)', 'timeout'), ('print("private-secret")', 'invalid_protocol'),
+        for source, category in [('import signal\nsignal.pause()', 'timeout'), ('print("private-secret")', 'invalid_protocol'),
                                  ('print("x"*5000000)', 'output_limit')]:
             with self.assertRaises(provider_process.ProcessError) as raised:
                 provider_process.invoke(self.fake(source), {}, .4)
@@ -538,10 +539,10 @@ class DispatcherTests(unittest.TestCase):
 
     def test_outer_interrupt_reaps_term_ignoring_cli_target(self):
         marker = self.root / "target.pid"
-        source = ('import os,signal,time; from pathlib import Path; '
+        source = ('import os,signal; from pathlib import Path; '
                   'signal.signal(signal.SIGTERM, signal.SIG_IGN); '
                   f'p=Path({str(marker)!r}); t=p.with_suffix(".tmp"); '
-                  't.write_text(str(os.getpid())); t.replace(p); time.sleep(30)')
+                  't.write_text(str(os.getpid())); t.replace(p); signal.pause()')
         self.config["providers"]["echo"]["command"] = [
             "{python}", "-B", "{repo}/examples/cli_adapter.py", "--",
             sys.executable, "-B", "-c", source]
@@ -555,10 +556,7 @@ class DispatcherTests(unittest.TestCase):
             process.stdin.write(json.dumps(request))
             process.stdin.close()
             process.stdin = None
-            deadline = time.monotonic() + 5
-            while not marker.exists() and time.monotonic() < deadline:
-                time.sleep(.02)
-            self.assertTrue(marker.exists())
+            self.assertTrue(wait_until(marker.exists), 'adapter readiness deadline exceeded')
             process.send_signal(signal.SIGTERM)
             stdout, stderr = process.communicate(timeout=8)
             self.assertEqual(process.returncode, 1)
@@ -577,7 +575,7 @@ class DispatcherTests(unittest.TestCase):
                     pass
 
     def test_sigterm_leaves_failed_state_and_cleans_adapter(self):
-        self.register_fake('import json,os,sys,time\nfrom pathlib import Path\nrequest=json.load(sys.stdin)\nmarker=Path(request["task_file"]).parent.joinpath("adapter.pid")\ntemporary=marker.with_suffix(".tmp")\ntemporary.write_text(str(os.getpid()))\ntemporary.replace(marker)\ntime.sleep(30)\n')
+        self.register_fake('import json,os,sys,signal\nfrom pathlib import Path\nrequest=json.load(sys.stdin)\nmarker=Path(request["task_file"]).parent.joinpath("adapter.pid")\ntemporary=marker.with_suffix(".tmp")\ntemporary.write_text(str(os.getpid()))\ntemporary.replace(marker)\nsignal.pause()\n')
         request = {'version': 1, 'task': 'draft', 'output': str(self.root / 'result')}
         process = subprocess.Popen([sys.executable, '-B', str(ROOT / 'scripts/agent_use.py'), 'run', '--config', str(self.path)],
                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -586,10 +584,7 @@ class DispatcherTests(unittest.TestCase):
             process.stdin.close()
             process.stdin = None
             marker = self.root / 'result/adapter.pid'
-            deadline = time.monotonic() + 5
-            while not marker.exists() and time.monotonic() < deadline:
-                time.sleep(.02)
-            self.assertTrue(marker.exists())
+            self.assertTrue(wait_until(marker.exists), 'adapter readiness deadline exceeded')
             pid = int(marker.read_text())
             process.send_signal(signal.SIGTERM)
             stdout, _stderr = process.communicate(timeout=8)

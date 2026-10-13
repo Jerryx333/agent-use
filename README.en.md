@@ -108,4 +108,4 @@ Run them from the repository root. Without `--config`, the registry is chosen by
 
 ## Contributing
 
-Run the offline tests and shell checks from the repository root: `bash scripts/test.sh`. Submit changes through PRs. The core stays vendor-neutral; adapters for specific vendors belong in separate repositories. See [CONTRIBUTING.md](CONTRIBUTING.md). License: [Apache-2.0](LICENSE).
+Run the offline tests and shell checks from the repository root: `bash scripts/test.sh`. Modules run in parallel with `max(1, CPUs // 4)` workers by default; `-j N` is capped at `max(1, CPUs // 2)`. The runner attempts to lower priority to nice 10; `--durations` shows the slowest 10 cases. All cases are lightweight and offline; there is no heavy-test switch. Submit changes through PRs. The core stays vendor-neutral; adapters for specific vendors belong in separate repositories. See [CONTRIBUTING.md](CONTRIBUTING.md). License: [Apache-2.0](LICENSE).

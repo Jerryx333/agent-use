@@ -88,3 +88,5 @@ README 中的 `tr` 示例，`list`、`validate`、`run` 三个命令的退出码
 - Linux、macOS 等 POSIX 系统。代码和测试依赖 POSIX 进程组及 `fcntl` 文件锁，不支持原生 Windows。
 - 克隆仓库需要 Git；README 中的命令和测试使用 Bash，CLI 示例还需要标准工具 `tr`。
 - 示例可以离线运行，无需模型账户。首次下载仓库需要网络；已有本地副本时跳过克隆步骤。
+
+在仓库根目录运行 `bash scripts/test.sh` 执行离线测试和 shell 检查；加 `--durations` 显示最慢的 10 个用例。默认模块并发为 `max(1, CPU 核数 // 4)`，`-j N` 上限为 `max(1, CPU 核数 // 2)`。入口自动尝试降到 nice 10，并为每个模块隔离临时 HOME。没有重用例，也没有重用例开关。

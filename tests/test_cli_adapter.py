@@ -1,5 +1,6 @@
 # Offline CLI protocol, bounded output, and owned process-group tests.
 
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -7,8 +8,9 @@ import signal
 import subprocess
 import sys
 import tempfile
-import time
 import unittest
+
+from support import wait_until
 
 ROOT = Path(__file__).resolve().parents[1]
 LIMIT = 4 * 1024 * 1024
@@ -54,8 +56,8 @@ class CliAdapterTests(unittest.TestCase):
                  ('import sys; sys.exit(3)', 'cli_exit_nonzero'),
                  ('pass', 'empty_output'),
                  ('print("   ")', 'empty_output'),
-                 ('import time; time.sleep(30)', 'timeout'),
-                 ('import os,time; os.close(1); time.sleep(30)', 'timeout'),
+                 ('import signal; signal.pause()', 'timeout'),
+                 ('import os,signal; os.close(1); signal.pause()', 'timeout'),
                  (f'import sys; sys.stdout.buffer.write(b"x" * {LIMIT + 1})', 'output_too_large')]
         for source, reason in cases:
             with self.subTest(reason=reason, source=source):
@@ -84,20 +86,29 @@ class CliAdapterTests(unittest.TestCase):
         self.assertEqual(reply['response'].strip(), 'done')
 
     def test_timeout_stops_descendant(self):
-        marker = self.root / 'late-output'
+        lock_file = self.root / 'child.lock'
         pid_file = self.root / 'child-pid'
-        child = ('import signal,time; from pathlib import Path; '
+        child = ('import fcntl,os,signal; from pathlib import Path; '
                  'signal.signal(signal.SIGTERM, signal.SIG_IGN); '
-                 f'time.sleep(3); Path({str(marker)!r}).write_text("alive")')
-        source = ('import subprocess,sys,time; from pathlib import Path; '
-                  f'p=subprocess.Popen([sys.executable,"-B","-c",{child!r}]); '
-                  f'Path({str(pid_file)!r}).write_text(str(p.pid)); time.sleep(30)')
+                 f'lock=open({str(lock_file)!r}, "w"); '
+                 'fcntl.flock(lock, fcntl.LOCK_EX); '
+                 f'p=Path({str(pid_file)!r}); t=p.with_suffix(".tmp"); '
+                 't.write_text(str(os.getpid())); t.replace(p); signal.pause()')
+        source = ('import subprocess,sys,signal; '
+                  f'subprocess.Popen([sys.executable,"-B","-c",{child!r}]); '
+                  'signal.pause()')
         try:
             reply = self.python(source, timeout=.5)
             self.assertEqual(reply['reason'], 'timeout')
-            self.assertTrue(pid_file.exists())
-            time.sleep(1)
-            self.assertFalse(marker.exists())
+            self.assertTrue(pid_file.exists())  # Published only after taking the lock.
+            with lock_file.open('r') as lock:
+                def released():
+                    try:
+                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except BlockingIOError:
+                        return False
+                    return True
+                self.assertTrue(wait_until(released), 'descendant still holds its lock')
         finally:
             if pid_file.exists():
                 try:

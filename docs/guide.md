@@ -88,3 +88,5 @@ Treat registries and adapters as local executable code. Anyone who can change a 
 - A POSIX system, such as Linux or macOS. The code and tests require POSIX process groups and `fcntl` file locks; native Windows is not supported.
 - Git to clone the repository, Bash for the README commands and tests, and the standard `tr` utility for the CLI example.
 - The examples run offline without a model account. Downloading the repository for the first time requires network access; if you already have a local copy, skip the clone step.
+
+Run offline tests and shell checks from the repository root with `bash scripts/test.sh`; add `--durations` for the slowest 10 cases. Default module concurrency is `max(1, CPUs // 4)`; `-j N` is capped at `max(1, CPUs // 2)`. The runner attempts nice 10 automatically and isolates each module with a temporary HOME. There are no heavy cases or heavy-test switches.
