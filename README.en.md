@@ -20,7 +20,7 @@ Hand a task to any AI model you can run in a terminal, with one command. If one 
 ## Related projects
 
 - [agent-use-adapters](https://github.com/Jerryx333/agent-use-adapters): ready-made adapters for common CLIs, so you can hand tasks to the ones you are already logged in to.
-- [aiw](https://github.com/Jerryx333/aiw): lets a Claude Code / Codex main session hand off routine work such as reading code, running commands and drafting to other models; it uses agent-use to connect more models.
+- [aiw](https://github.com/Jerryx333/aiw): lets an AI coding assistant's main session hand off routine work such as reading code, running commands and drafting to other models; it uses agent-use to connect more models.
 
 ## Questions you may have
 

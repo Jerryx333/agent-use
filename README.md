@@ -20,7 +20,7 @@
 ## 相关项目
 
 - [agent-use-adapters](https://github.com/Jerryx333/agent-use-adapters)：已经写好的常见 CLI 适配器，装上就能把任务交给你已登录的那几家。
-- [aiw](https://github.com/Jerryx333/aiw)：让 Claude Code / Codex 主会话把读代码、跑命令、起草这类体力活派给别的模型，它用 agent-use 接入更多模型。
+- [aiw](https://github.com/Jerryx333/aiw)：让 AI 编程助手的主会话把读代码、跑命令、起草这类体力活派给别的模型，它用 agent-use 接入更多模型。
 
 ## 你可能会担心的
 

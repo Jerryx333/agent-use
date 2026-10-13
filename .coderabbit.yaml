@@ -37,11 +37,11 @@ reviews:
     - path: "docs/**"
       instructions: >-
         Check documentation against actual code behavior and protocol semantics.
-        Keep related content in README.md and README.zh-CN.md synchronized.
+        Keep related content in README.md (Chinese) and README.en.md (English) synchronized.
     - path: "README*.md"
       instructions: >-
         Check instructions and examples against actual code behavior. Keep
-        README.md and README.zh-CN.md synchronized in content.
+        README.md (Chinese) and README.en.md (English) synchronized in content.
     - path: "**"
       instructions: >-
         Keep the project provider-neutral and general-purpose. Do not introduce
