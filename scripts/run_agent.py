@@ -13,7 +13,7 @@ import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from dispatcher_config import ConfigError, ProviderDisabled, dangerous_environment_name, disabled_status, load_config, resolve, resolve_config_path, scheduler_versions as core_versions
+from dispatcher_config import ConfigError, ProviderDisabled, dangerous_environment_name, disabled_status, load_config, resolve, resolve_config_path, scheduler_versions as core_versions, workspace_options
 from provider_process import ProcessError, invoke
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -60,15 +60,16 @@ def provider_environment(route):
             if (name in names or name.startswith(prefixes)) and not dangerous_environment_name(name)}
 
 
-def attempt(provider, task, directory, timeout, expected, route=None):
+def attempt(provider, task, directory, timeout, expected, route=None, workdir=None, access="none"):
     started = time.monotonic()
     record = {"provider": provider, "state": "failed"}
     try:
-        route = route or resolve(load_config(), requested=[provider], timeout=timeout)[0]
+        route = route or resolve(load_config(), requested=[provider], timeout=timeout, access=access)[0]
         record["requested_model"] = route["model"]
         record["options"] = route["options"]
         request = {"protocol_version": 1, "task_file": str(task.resolve()), "output": str(directory.resolve()),
-                   "model": route["model"], "timeout": timeout, "options": route["options"], "expect_exact": expected}
+                   "model": route["model"], "timeout": timeout, "options": route["options"], "expect_exact": expected,
+                   "workdir": workdir, "access": access}
         environment = provider_environment(route)
         reply = invoke(route["command"], request, timeout + 8, environment)
         if not isinstance(reply, dict) or type(reply.get("protocol_version")) is not int or reply["protocol_version"] != 1 or reply.get("accepted") is not False:
@@ -178,12 +179,14 @@ def run(args):
             raise RouteError("order and providers are mutually exclusive")
         requested = order.split(",")
     try:
+        args.workdir, args.access = workspace_options(getattr(args, "workdir", None),
+            getattr(args, "access", "none"), getattr(args, "require_no_tools", False))
         config_path = resolve_config_path(getattr(args, "config", None))
         routes = resolve(load_config(config_path), profile=getattr(args, "profile", None),
             requested=requested, models=getattr(args, "models", None), timeout=args.timeout,
-            require_no_tools=getattr(args, "require_no_tools", False))
+            require_no_tools=getattr(args, "require_no_tools", False), access=args.access)
     except ProviderDisabled:
-        return disabled_status(args.output)
+        return disabled_status(args.output, args.workdir, args.access)
     except ConfigError as error:
         raise RouteError(str(error)) from None
     apply_options(routes, getattr(args, "option", []))
@@ -201,6 +204,7 @@ def run(args):
     scheduler_versions = core_versions()
     fingerprint = digest(json.dumps({"prompt": prompt, "routes": routes, "cwd": str(Path.cwd().resolve()),
                                      "expected": args.expect_exact,
+                                     "workdir": args.workdir, "access": args.access,
                                      "adapter_versions": adapter_versions, "scheduler_versions": scheduler_versions}, sort_keys=True))
     output = Path(args.output).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -229,7 +233,8 @@ def execute(args, prompt, routes, providers, fingerprint, output, scheduler_vers
         return status
     output.mkdir(parents=True, mode=0o700)
     status = {"protocol_version": 1, "state": "running", "accepted": False, "request_sha256": fingerprint,
-              "order": providers, "attempts": [], "scheduler_versions": scheduler_versions}
+              "order": providers, "attempts": [], "scheduler_versions": scheduler_versions,
+              "workdir": args.workdir, "access": args.access}
     write_status(output, status)
     task = output / "task.txt"
     try:
@@ -241,7 +246,8 @@ def execute(args, prompt, routes, providers, fingerprint, output, scheduler_vers
             status["current_provider"] = provider
             write_status(output, status)
             print(f"agent-use: invoking {provider}", file=sys.stderr)
-            record, content, fatal = attempt(provider, task, attempts / provider, route["timeout"], args.expect_exact, route)
+            record, content, fatal = attempt(provider, task, attempts / provider, route["timeout"], args.expect_exact,
+                                             route, args.workdir, args.access)
             record["adapter_versions"] = adapter_versions[provider]
             status["attempts"].append(record)
             if content is not None:
@@ -281,6 +287,8 @@ def main():
     parser.add_argument("--option", action="append", default=[], help="PROVIDER.KEY=VALUE, repeatable; VALUE may be empty")
     parser.add_argument("--model", action="append", default=[], help="provider=model, repeatable")
     parser.add_argument("--require-no-tools", action="store_true")
+    parser.add_argument("--workdir", help="Existing workspace directory; requires access ro or rw")
+    parser.add_argument("--access", choices=["none", "ro", "rw"], default="none")
     parser.add_argument("--timeout", type=float, help="Override timeout in seconds for each selected route")
     parser.add_argument("--expect-exact", help="Optional exact response check; mismatch tries the next route")
     args = parser.parse_args()

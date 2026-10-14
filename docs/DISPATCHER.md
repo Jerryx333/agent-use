@@ -21,7 +21,9 @@ A request is an object with:
 | `models` | Map of selected provider names to model overrides |
 | `timeout` | Override each route's timeout, in seconds |
 | `expect_exact` | Optional exact response string, checked by the dispatcher |
-| `require_no_tools` | Boolean; reject selected routes not declaring `disabled` |
+| `require_no_tools` | Boolean; require `disabled` or `workspace` with `access=none` |
+| `workdir` | Existing directory, resolved to an absolute path; required for `ro`/`rw`, forbidden for `none` |
+| `access` | `none` (default), `ro`, or `rw`; `ro`/`rw` conflict with `require_no_tools` |
 
 Route objects accept `provider`, `model`, `timeout`, and `options`. Unknown fields
 are rejected. Models are nonblank single-line strings of at most 256 characters.
@@ -30,7 +32,16 @@ Timeouts are finite numbers in `(0, 86400]`; booleans are not timeouts.
 The file interface is `run_agent.py TASK_FILE OUTPUT`, with optional `--config`,
 `--profile`, `--order name,name`, repeated `--model provider=model`, repeated
 `--option PROVIDER.KEY=VALUE`, `--timeout`, `--expect-exact`, and
-`--require-no-tools`. Option overrides must target selected providers and keys
+`--require-no-tools`, `--workdir DIR`, and `--access none|ro|rw`.
+
+| Workspace parameter | Meaning |
+| --- | --- |
+| `--workdir DIR` | Existing directory resolved to an absolute path; required with `ro`/`rw`, forbidden with `none` |
+| `--access none` | Default text-only mode; workspace adapters must hard-disable tools |
+| `--access ro` | Read files, search, and list directories; no editing or commands |
+| `--access rw` | All built-in tools, including editing, writing, and Bash, with confirmations bypassed |
+
+Workspace access conflicts with `--require-no-tools`. Option overrides must target selected providers and keys
 already declared in their registry `options`. Duplicate targets are rejected.
 Values are strings, including empty strings; adapters validate their own value
 semantics. JSON route options also require declared keys, but retain scalar types.
@@ -51,9 +62,23 @@ Provider fields:
 | `models` | Optional descriptive model list, not an exhaustive restriction |
 | `timeout` | Default route timeout, default 60 seconds |
 | `options` | Non-sensitive scalar defaults and declared override keys |
-| `tool_policy` | `disabled`, `guarded`, or `unknown` (default) |
+| `tool_policy` | `disabled`, `guarded`, `unknown` (default), or `workspace` |
 | `env_prefixes` | Optional array of additional allowed environment prefixes |
 | `env_names` | Optional array of additional allowed exact environment names |
+
+| `tool_policy` value | Declaration |
+| --- | --- |
+| `disabled` | Tools hard-disabled |
+| `guarded` | Tools guarded by the adapter; does not satisfy `require_no_tools` |
+| `unknown` | Tool policy unspecified |
+| `workspace` | Supports `ro`/`rw`; hard-disables tools for `none`, satisfying `require_no_tools` |
+
+For `access=ro` or `rw`, resolution retains only `workspace` routes, preserving
+their order; no remaining enabled workspace routes is an error. Existing
+provider registrations are unchanged. Adapters enforce the requested tool mode
+and set their agent subprocess cwd to `workdir`; the dispatcher passes fields
+without changing its own cwd. MCP must never load in any mode; use strict MCP
+configuration and empty setting sources. No `sandbox-exec` wrapper is used.
 
 Each environment prefix must match `[A-Z][A-Z0-9]{1,62}_`: a trailing
 underscore and at least three characters are required. Matching is case-sensitive
@@ -131,13 +156,20 @@ The adapter receives one JSON object on stdin:
   "model": "echo-1",
   "timeout": 60,
   "options": {"prefix": "echo: "},
-  "expect_exact": null
+  "expect_exact": null,
+  "workdir": null,
+  "access": "none"
 }
 ```
 
 Actual `task_file` and `output` values are absolute paths. The task file exists;
-the adapter may create its attempt output directory if needed. The dispatcher
-passes a timeout budget and enforces a process deadline of that budget plus
+the adapter may create its attempt output directory if needed.
+`workdir` is an absolute directory for `ro`/`rw`, or `null` for `none`.
+The protocol version remains 1; these are additive fields. Default `none`
+must hard-disable tools in workspace adapters. For `ro`, return a review
+conclusion; for `rw`, return a change description and write directly into
+`workdir`, with the caller reviewing the diff. See [workspace tool modes](ADAPTERS.md#workspace-tool-modes).
+The dispatcher passes a timeout budget and enforces a process deadline of that budget plus
 8 seconds. Adapters should put diagnostics on stderr and emit exactly one JSON
 object on stdout. Combined stdout and stderr are limited to 4 MiB; adapter stdin
 has a separate 4 MiB limit. Timeout or interruption terminates the process group,
@@ -256,6 +288,7 @@ Status fields (optional fields appear only when relevant):
 | Field | Meaning |
 | --- | --- |
 | `protocol_version`, `state`, `accepted` | Version 1, current state, and always false acceptance |
+| `workdir`, `access` | Absolute workspace path or `null`, and requested access mode |
 | `request_sha256`, `response_sha256` | Request fingerprint and successful response hash |
 | `order`, `current_provider`, `selected_provider` | Route order, active route, and successful route |
 | `reason`, `fatal` | Terminal failure reason and optional fatal flag |
@@ -281,7 +314,7 @@ new fields into older status files.
 A nonblocking advisory lock protects each output location. Existing successful
 runs are reusable only when the request fingerprint and response hash match.
 The fingerprint covers task content, resolved routes, expected response,
-the invocation working directory (resolved absolute path),
+the invocation working directory (resolved absolute path), workspace `workdir` and `access`,
 scheduler sources, and the content of existing files appearing as command
 arguments. It does not discover imported modules, resolve executables through
 PATH for hashing, or hash environment variable values. After changing adapter

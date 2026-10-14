@@ -88,6 +88,8 @@ JSON
 printf '%s' '{"version":1,"task":"hello","profile":"local","expect_exact":"HELLO"}' | python3 -B scripts/agent_use.py run --config runs/dispatcher.json
 ```
 
+`tool_policy` accepts `disabled`, `guarded`, `unknown`, or `workspace`. Workspace adapters hard-disable tools by default (`access=none`). Opt in with `workdir` + `access=ro` (read tools only) or `access=rw` (all built-in tools, confirmations bypassed); only `workspace` routes qualify. See [workspace access](docs/guide.md#workspace-access).
+
 For your own tool, replace `tr`, `a-z` and `A-Z` with its program and arguments, and `default_model` with the model name. Where registries live and how the wrapper passes arguments: see the [guide](docs/guide.md#cli-integration-details).
 
 ## Common commands

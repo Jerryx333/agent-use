@@ -19,6 +19,8 @@ Read one JSON object from stdin. The dispatcher supplies these fields:
 | `timeout` | Timeout budget in seconds |
 | `options` | Object containing declared defaults and permitted overrides |
 | `expect_exact` | Expected response string, or `null` |
+| `workdir` | Resolved absolute workspace directory, or `null` for `access=none` |
+| `access` | `none` (default), `ro`, or `rw` |
 
 Emit exactly one JSON object on stdout. Put safe diagnostics on stderr, never
 progress messages on stdout. Adapter stdin has a 4 MiB limit; combined stdout
@@ -54,6 +56,27 @@ a single-route run but still allow fallback in a configured multi-route chain.
 `interrupted` always stops the entire chain. Exhaustion reports
 `all_providers_failed`. `staged_for_review` means a draft is available, not that
 its contents or the adapter's actions have been approved.
+
+## Workspace tool modes
+
+Read `workdir` and `access` from the request; for older callers, missing fields
+mean `null` and `none`. Register `tool_policy: "workspace"` only when your adapter
+implements all three modes. Default `none` must hard-disable tools, exactly like
+`disabled`; a prompt instruction alone is insufficient. Unsupported workspace
+modes must fail before starting the agent.
+
+For `ro`, set the agent subprocess cwd to `workdir` and allow only read-file,
+search, and directory-listing tools. Disable editing, writes, Bash, and other
+command execution. For `rw`, set cwd to `workdir`, enable all built-in tools
+(including editing, writing files, and Bash), and bypass confirmation
+(equivalent to `bypassPermissions`). Do not wrap execution in `sandbox-exec`.
+In every mode, do not load MCP: retain strict MCP configuration and empty
+setting sources. The core does not configure provider-specific tool flags.
+
+Return `staged_for_review` and a text `response` as usual: a review conclusion
+for `ro`, a change description for `rw`. Writes land directly in `workdir`; the
+caller reviews the diff. Artifacts in `output` do not isolate those changes, and
+a failed route may already have changed files before fallback.
 
 ## Process and credential safety
 

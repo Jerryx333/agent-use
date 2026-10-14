@@ -8,10 +8,10 @@ import signal
 import sys
 import tempfile
 
-from dispatcher_config import ConfigError, ProviderDisabled, disabled_status, catalog, fields, load_config, resolve, resolve_config_path
+from dispatcher_config import ConfigError, ProviderDisabled, disabled_status, catalog, fields, load_config, resolve, resolve_config_path, workspace_options
 from run_agent import RouteError, interrupted, run
 
-REQUEST_FIELDS = {"version", "task", "output", "profile", "providers", "models", "timeout", "expect_exact", "require_no_tools"}
+REQUEST_FIELDS = {"version", "task", "output", "profile", "providers", "models", "timeout", "expect_exact", "require_no_tools", "workdir", "access"}
 
 
 def request_options(request, config_path):
@@ -26,16 +26,21 @@ def request_options(request, config_path):
         raise ConfigError("expect_exact must be a string")
     if not isinstance(request.get("require_no_tools", False), bool):
         raise ConfigError("require_no_tools must be boolean")
+    if "workdir" in request and not isinstance(request["workdir"], str):
+        raise ConfigError("workdir must be a path string")
+    workdir, access = workspace_options(request.get("workdir"), request.get("access", "none"),
+        request.get("require_no_tools", False))
     if ("profile" in request and request["profile"] is None) or ("providers" in request and request["providers"] is None):
         raise ConfigError("profile/providers must not be null")
     models = request.get("models", {})
     if not isinstance(models, dict):
         raise ConfigError("models must map provider names to models")
     routes = resolve(load_config(config_path), profile=request.get("profile"), requested=request.get("providers"),
-        models=models, timeout=request.get("timeout"), require_no_tools=request.get("require_no_tools", False))
+        models=models, timeout=request.get("timeout"), require_no_tools=request.get("require_no_tools", False), access=access)
     options = argparse.Namespace(task=None, output=request.get("output"), config=config_path, order=None,
         providers=request.get("providers"), profile=request.get("profile"), models=models, timeout=request.get("timeout"),
-        expect_exact=request.get("expect_exact"), require_no_tools=request.get("require_no_tools", False))
+        expect_exact=request.get("expect_exact"), require_no_tools=request.get("require_no_tools", False),
+        workdir=workdir, access=access)
     return options, routes
 
 
@@ -66,7 +71,9 @@ def main():
                       "reason": "provider_disabled", "fatal": False, "attempts": []}
             if args.action == "run":
                 output = request.get("output") or str(Path(tempfile.mkdtemp(prefix="agent-use-job-")) / "result")
-                result = {**disabled_status(output), "run_directory": str(Path(output).expanduser().resolve())}
+                workdir, access = workspace_options(request.get("workdir"), request.get("access", "none"),
+                    request.get("require_no_tools", False))
+                result = {**disabled_status(output, workdir, access), "run_directory": str(Path(output).expanduser().resolve())}
             print(json.dumps(result, ensure_ascii=False))
             return 1
         if args.action == "validate":

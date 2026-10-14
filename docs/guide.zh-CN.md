@@ -41,6 +41,14 @@ cat runs/hello/status.json
 
 `fallback-demo` 配置组合中，`fail-demo` 会故意失败，随后 `echo` 成功；`attempts` 数组记录两次尝试。中断会停止整条链，详见[失败与回退语义](DISPATCHER.md#failure-and-fallback-semantics)。
 
+## Workspace 工具访问
+
+默认 `access: "none"` 保持纯文本行为，workspace 适配器必须硬禁工具。`tool_policy` 可取 `disabled`、`guarded`、`unknown`、`workspace`。只有声明为 `workspace` 的提供方可处理 `ro`/`rw`，其他路由被过滤，全部过滤后报错。内置供应商注册保持不变。
+
+使用支持 workspace 的注册表时，可向 JSON 入口提交 `{"version":1,"task":"评审仓库","workdir":"./repo","access":"ro"}`，或执行 `python3 -B scripts/run_agent.py task.txt runs/review --workdir ./repo --access ro`。`workdir` 必须是已存在目录，并解析为绝对路径；`ro`/`rw` 时必填，`none` 时禁止传入。workspace 访问与 `require_no_tools` / `--require-no-tools` 冲突；`none` 时该约束接受 `disabled` 和 `workspace`。
+
+`ro` 只允许读文件、搜索和列目录，禁止编辑和跑命令；`rw` 开放全部内置工具（含写文件、编辑和 Bash），跳过确认。适配器将 cwd 设为 `workdir`，一律不加载 MCP（严格 MCP 配置、空 setting sources），不套 `sandbox-exec`。结果仍为 `staged_for_review`，`response` 在 `ro` 时是评审结论，在 `rw` 时是改动说明。文件改动直接落在 `workdir`，由调用方 diff 验收。`status.json` 记录 `workdir`/`access`，两者也纳入请求指纹。详见[适配器要求](ADAPTERS.md#workspace-tool-modes)。
+
 ## 接入命令行工具的细节
 
 README 中的 `tr` 示例，`list`、`validate`、`run` 三个命令的退出码都为 0：`list` 列出 `my-cli`，`validate` 返回 `"state": "valid"`，`run` 返回 `"response": "HELLO"` 和 `accepted: false`。校验只检查注册表和请求，不启动命令，也不检查程序是否可用、认证是否成功或实际运行行为。

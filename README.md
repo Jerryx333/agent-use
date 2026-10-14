@@ -88,6 +88,8 @@ JSON
 printf '%s' '{"version":1,"task":"hello","profile":"local","expect_exact":"HELLO"}' | python3 -B scripts/agent_use.py run --config runs/dispatcher.json
 ```
 
+`tool_policy` 可取 `disabled`、`guarded`、`unknown`、`workspace`。workspace 适配器默认硬禁工具（`access=none`）；传 `workdir` 和 `access=ro` 可只开读类工具，`access=rw` 开全部内置工具并跳过确认，仅 `workspace` 路由可用。详见 [workspace 访问](docs/guide.zh-CN.md#workspace-工具访问)。
+
 接你自己的工具时，把 `tr`、`a-z`、`A-Z` 换成它的程序名和参数，把 `default_model` 换成模型名。注册表放哪、包装器怎么传参，见[使用指南](docs/guide.zh-CN.md#接入命令行工具的细节)。
 
 ## 常用命令

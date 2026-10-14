@@ -55,6 +55,26 @@ def positive_timeout(value):
     return value
 
 
+def workspace_options(workdir=None, access="none", require_no_tools=False):
+    if not isinstance(access, str) or access not in {"none", "ro", "rw"}:
+        fail("access must be none, ro, or rw")
+    if access == "none":
+        if workdir is not None:
+            fail("workdir requires access ro or rw")
+        return None, access
+    if require_no_tools:
+        fail("workspace access conflicts with require_no_tools")
+    if not isinstance(workdir, str) or not workdir.strip():
+        fail("workdir is required for workspace access")
+    try:
+        directory = Path(workdir).expanduser().resolve(strict=True)
+        if not directory.is_dir():
+            fail("workdir must be an existing directory")
+    except (OSError, ValueError, RuntimeError):
+        fail("workdir must be an existing directory")
+    return str(directory), access
+
+
 def model_name(value):
     if not isinstance(value, str) or not value.strip() or len(value) > 256 or any(ord(character) < 32 for character in value):
         fail("model must be a nonempty single-line string")
@@ -155,7 +175,7 @@ def load_config(path=None):
         model_name(specification.get("default_model"))
         positive_timeout(specification.get("timeout", 60))
         options(specification.get("options", {}))
-        if specification.get("tool_policy", "unknown") not in {"disabled", "guarded", "unknown"}:
+        if specification.get("tool_policy", "unknown") not in {"disabled", "guarded", "unknown", "workspace"}:
             fail("invalid tool_policy")
         if not isinstance(specification.get("models", []), list):
             fail("models must be an array")
@@ -174,11 +194,15 @@ def load_config(path=None):
     return config
 
 
-def resolve(config, profile=None, requested=None, models=None, timeout=None, require_no_tools=False):
+def resolve(config, profile=None, requested=None, models=None, timeout=None, require_no_tools=False, access="none"):
     if profile is not None and (not isinstance(profile, str) or not NAME.fullmatch(profile)):
         fail("invalid profile name")
     if not isinstance(require_no_tools, bool):
         fail("require_no_tools must be boolean")
+    if not isinstance(access, str) or access not in {"none", "ro", "rw"}:
+        fail("access must be none, ro, or rw")
+    if access != "none" and require_no_tools:
+        fail("workspace access conflicts with require_no_tools")
     if profile is not None and requested is not None:
         fail("profile and providers/order are mutually exclusive")
     selected_profile = profile or config["default_profile"]
@@ -203,7 +227,9 @@ def resolve(config, profile=None, requested=None, models=None, timeout=None, req
                 raise ProviderDisabled("requested provider is disabled")
             continue
         policy = specification.get("tool_policy", "unknown")
-        if require_no_tools and policy != "disabled":
+        if access != "none" and policy != "workspace":
+            continue
+        if require_no_tools and policy not in {"disabled", "workspace"}:
             fail("selected provider does not guarantee disabled tools; use text-safe or explicitly select a tool-free provider")
         model = model_name(overrides.get(name, entry.get("model", specification["default_model"])))
         budget = positive_timeout(timeout if timeout is not None else entry.get("timeout", specification.get("timeout", 60)))
@@ -217,6 +243,8 @@ def resolve(config, profile=None, requested=None, models=None, timeout=None, req
                        "env_prefixes": specification.get("env_prefixes", []),
                        "env_names": specification.get("env_names", [])})
     if not routes:
+        if access != "none":
+            fail("no enabled workspace providers")
         raise ProviderDisabled("no enabled providers")
     return routes
 
@@ -239,11 +267,11 @@ def scheduler_versions():
             for name in ("run_agent.py", "dispatcher_config.py", "provider_process.py")}
 
 
-def disabled_status(output):
+def disabled_status(output, workdir=None, access="none"):
     """Persist a rejected request without overwriting an existing run."""
     status = {"protocol_version": 1, "state": "failed", "accepted": False,
               "reason": "provider_disabled", "fatal": False, "attempts": [],
-              "scheduler_versions": scheduler_versions()}
+              "scheduler_versions": scheduler_versions(), "workdir": workdir, "access": access}
     directory = Path(output).expanduser().resolve()
     directory.mkdir(parents=True, mode=0o700, exist_ok=False)
     (directory / "status.json").write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

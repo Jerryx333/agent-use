@@ -63,6 +63,103 @@ class DispatcherTests(unittest.TestCase):
         self.config["profiles"] = {"default": ["newagent"]}
         self.save()
 
+    def test_workspace_parameter_validation(self):
+        cases = [({"access": "ro"}, "required"),
+                 ({"access": "rw", "workdir": str(self.root / "missing")}, "existing directory"),
+                 ({"access": "ro", "workdir": str(self.task)}, "existing directory"),
+                 ({"access": "ro", "workdir": str(self.root), "require_no_tools": True}, "conflicts"),
+                 ({"access": "none", "workdir": str(self.root)}, "requires access"),
+                 ({"access": "bad"}, "access must"),
+                 ({"access": None}, "access must"),
+                 ({"access": "rw", "workdir": 42}, "workdir")]
+        for values, message in cases:
+            with self.subTest(values=values):
+                args = self.args()
+                for name, value in values.items():
+                    setattr(args, name, value)
+                with mock.patch.object(router, "invoke") as invoke:
+                    with self.assertRaisesRegex(router.RouteError, message):
+                        router.run(args)
+                    invoke.assert_not_called()
+                with self.assertRaisesRegex(config.ConfigError, message):
+                    agent_use.request_options({"version": 1, "task": "draft", **values}, self.path)
+        for flags, message in [(["--access", "ro"], "required"),
+                               (["--access", "rw", "--workdir", str(self.root / "missing")], "existing directory"),
+                               (["--access", "ro", "--workdir", str(self.root), "--require-no-tools"], "conflicts"),
+                               (["--workdir", str(self.root)], "requires access")]:
+            result = subprocess.run([sys.executable, "-B", str(ROOT / "scripts/run_agent.py"),
+                str(self.task), str(self.root / "invalid"), "--config", str(self.path), *flags],
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+        self.assertFalse((self.root / "invalid").exists())
+
+    def test_workspace_resolve_filters_routes(self):
+        self.config["providers"]["second"]["tool_policy"] = "workspace"
+        self.save()
+        loaded = config.load_config(self.path)
+        for access in ("ro", "rw"):
+            routes = config.resolve(loaded, requested=["echo", "tool-demo", "second"], access=access)
+            self.assertEqual([route["provider"] for route in routes], ["second"])
+            self.assertEqual([route["provider"] for route in config.resolve(loaded, access=access)], ["second"])
+        self.assertEqual(len(config.resolve(loaded, requested=["second"], require_no_tools=True)), 1)
+        self.assertEqual(len(config.resolve(loaded, requested=["echo", "second"])), 2)
+        with self.assertRaisesRegex(config.ConfigError, "no enabled workspace providers"):
+            config.resolve(loaded, requested=["echo", "tool-demo"], access="ro")
+        with self.assertRaisesRegex(config.ConfigError, "conflicts"):
+            config.resolve(loaded, requested=["second"], access="rw", require_no_tools=True)
+
+    def test_workspace_subprocess_request_and_status(self):
+        self.register_fake('import json,sys\nrequest=json.load(sys.stdin)\n'
+            'print(json.dumps({"protocol_version":1,"state":"staged_for_review","accepted":False,'
+            '"response":json.dumps({key:request[key] for key in ("protocol_version","workdir","access")})}))\n')
+        self.config["providers"]["newagent"]["tool_policy"] = "workspace"
+        self.save()
+        for access in ("none", "ro", "rw"):
+            for entry in ("file", "json"):
+                with self.subTest(access=access, entry=entry):
+                    workdir = str(self.root / ".." / self.root.name) if access != "none" else None
+                    output = self.root / f"{entry}-{access}"
+                    request = {"version": 1, "task": "draft", "access": access, "output": str(output)}
+                    if workdir is not None:
+                        request["workdir"] = workdir
+                    if entry == "json":
+                        result = subprocess.run([sys.executable, "-B", str(ROOT / "scripts/agent_use.py"),
+                            "run", "--config", str(self.path)], input=json.dumps(request), capture_output=True, text=True)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        status = json.loads(result.stdout)
+                    else:
+                        command = [sys.executable, "-B", str(ROOT / "scripts/run_agent.py"),
+                            str(self.task), str(output), "--config", str(self.path), "--access", access]
+                        if workdir is not None:
+                            command += ["--workdir", workdir]
+                        result = subprocess.run(command, capture_output=True, text=True)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        status = json.loads(result.stdout)
+                    expected = {"workdir": str(self.root.resolve()) if workdir else None, "access": access}
+                    received = json.loads((output / "response.txt").read_text())
+                    self.assertEqual(received, {"protocol_version": 1, **expected})
+                    saved = json.loads((output / "status.json").read_text())
+                    for key, value in expected.items():
+                        self.assertEqual(status[key], value)
+                        self.assertEqual(saved[key], value)
+                    self.assertEqual(status["state"], "staged_for_review")
+                    self.assertFalse(status["accepted"])
+
+    def test_workspace_fingerprint_changes_with_access_and_workdir(self):
+        self.register_fake()
+        self.config["providers"]["newagent"]["tool_policy"] = "workspace"
+        self.save()
+        fingerprints = []
+        other = self.root / "workspace"
+        other.mkdir()
+        for index, (access, workdir) in enumerate((("none", None), ("ro", str(self.root)),
+                                                  ("rw", str(self.root)), ("rw", str(other)))):
+            args = self.args(access=access, workdir=workdir)
+            args.output = str(self.root / f"fingerprint-{index}")
+            fingerprints.append(router.run(args)["request_sha256"])
+        self.assertEqual(len(set(fingerprints)), 4)
+
     def test_dangerous_environment_prefixes_rejected(self):
         for prefix in ("LD_", "DYLD_", "NODE_", "PYTHON", "BASH_", "L", "DY", "LD_EXTRA_"):
             with self.subTest(prefix=prefix):

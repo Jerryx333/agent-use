@@ -41,6 +41,14 @@ An identical successful request can reuse its directory if its fingerprint and r
 
 In the `fallback-demo` profile, `fail-demo` deliberately fails; `echo` then succeeds. The `attempts` array records both. Interruption stops the chain; see [failure semantics](DISPATCHER.md#failure-and-fallback-semantics).
 
+## Workspace access
+
+The default `access: "none"` preserves text-only behavior; workspace adapters hard-disable tools. `tool_policy` accepts `disabled`, `guarded`, `unknown`, and `workspace`. Only providers registered as `workspace` can handle `ro`/`rw`; other routes are filtered out, and an empty result is an error. Existing bundled registrations are unchanged.
+
+For a workspace-capable registry, submit `{"version":1,"task":"Review this repository","workdir":"./repo","access":"ro"}` to the JSON entry point, or use `python3 -B scripts/run_agent.py task.txt runs/review --workdir ./repo --access ro`. `workdir` must exist and is resolved to an absolute path. It is required for `ro`/`rw` and forbidden for `none`; workspace access conflicts with `require_no_tools` / `--require-no-tools`. With `none`, `require_no_tools` accepts both `disabled` and `workspace`.
+
+`ro` allows reading files, searching, and listing directories, without editing or running commands. `rw` enables all built-in tools, including writes and Bash, and bypasses confirmations. The adapter sets cwd to `workdir`, never loads MCP (strict MCP configuration and empty setting sources), and uses no `sandbox-exec` wrapper. Results remain `staged_for_review`: `response` is a review conclusion for `ro` or a change description for `rw`. Writes land directly in `workdir`; review the diff. `status.json` records `workdir`/`access`, and both enter the request fingerprint. See [adapter requirements](ADAPTERS.md#workspace-tool-modes).
+
 ## CLI integration details
 
 For the `tr` example in the README, `list`, `validate` and `run` all exit 0: `list` shows `my-cli`; `validate` returns `"state": "valid"`; `run` returns `"response": "HELLO"` and `accepted: false`. Validation checks the registry and request without launching the command. It does not test executable availability, authentication, or runtime behavior.
