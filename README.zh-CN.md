@@ -110,4 +110,4 @@ printf '%s' '{"version":1,"task":"hello","profile":"local","expect_exact":"HELLO
 
 ## 参与贡献
 
-在仓库根目录运行离线测试和 shell 检查：`bash scripts/test.sh`。默认按测试模块并发，进程数为 `max(1, CPU 核数 // 4)`，`-j N` 可调且上限为 `max(1, CPU 核数 // 2)`；入口自动尝试降到 nice 10，`--durations` 显示最慢的 10 个用例。所有用例均为轻量离线测试，没有重用例开关。改动走 PR；核心保持厂商无关，具体厂商的适配器放到独立仓库，详见 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)。许可证：[Apache-2.0](LICENSE)。
+在仓库根目录运行离线测试和 shell 检查：`bash scripts/test.sh`。默认按测试模块并发，进程数为 `max(1, CPU 核数 // 4)`，`-j N` 可调且上限为 `max(1, CPU 核数 // 2)`；入口自动尝试降到 nice 10，`--durations` 显示最慢的 10 个用例。所有用例均为轻量离线测试，没有重用例开关。改动走 PR；核心保持厂商无关，具体厂商的适配器放到独立仓库，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。许可证：[Apache-2.0](LICENSE)。
