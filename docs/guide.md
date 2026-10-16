@@ -1,6 +1,6 @@
 # agent-use usage guide
 
-Start with the [README](../README.en.md) for what problems it solves. This guide covers run artifacts, registries, integration details, adapters and the trust model.
+Start with the [README](../README.md) for what problems it solves. This guide covers run artifacts, registries, integration details, adapters and the trust model.
 
 ## Terms
 
