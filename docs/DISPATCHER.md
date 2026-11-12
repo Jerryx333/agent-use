@@ -202,7 +202,11 @@ transport identifiers (`actual_model`, `selected_model`, `transport`), nonnegati
 finite numbers (`credits`, `switch_count`, `model_switch_count`), nonnegative
 integer token counts in `usage`, and at most 12 sanitized `model_attempts`.
 Other metadata is discarded. Usage keys are `input_tokens`, `output_tokens`,
-`thinking_tokens`, `cache_read_tokens`, and `total_tokens`.
+`thinking_tokens`, `cache_read_tokens`, and `total_tokens`. Counts cover the whole
+run (every model turn, not just the last). `input_tokens` excludes cache reads
+but includes cache writes, `cache_read_tokens` is the cached input, and
+`output_tokens` already includes `thinking_tokens`, which is only a breakdown.
+Report only what the upstream counted; omit a key rather than estimate it.
 
 ## Failure and fallback semantics
 
