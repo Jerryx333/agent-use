@@ -108,7 +108,7 @@ def attempt(provider, task, directory, timeout, expected, route=None, workdir=No
         usage = metadata.get("usage")
         if isinstance(usage, dict):
             record["usage"] = {name: value for name, value in usage.items() if
-                name in {"input_tokens", "output_tokens", "thinking_tokens", "cache_read_tokens", "total_tokens"}
+                name in {"input_tokens", "output_tokens", "thinking_tokens", "cache_read_tokens", "cache_write_tokens", "total_tokens"}
                 and type(value) is int and value >= 0}
         model_attempts = metadata.get("model_attempts")
         if isinstance(model_attempts, list):

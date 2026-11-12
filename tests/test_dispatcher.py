@@ -556,6 +556,18 @@ class DispatcherTests(unittest.TestCase):
         self.assertFalse(fatal)
 
 
+    def test_usage_keeps_only_known_nonnegative_integer_counts(self):
+        usage = {'input_tokens': 4, 'output_tokens': 2, 'thinking_tokens': 1, 'cache_read_tokens': 5,
+                 'cache_write_tokens': 3, 'total_tokens': 11}
+        reply = {'protocol_version': 1, 'state': 'staged_for_review', 'accepted': False, 'response': 'draft',
+                 'metadata': {'usage': dict(usage, cost=1, output_tokens=2, extra_tokens=9)}}
+        bad = dict(reply, metadata={'usage': {'input_tokens': -1, 'output_tokens': 1.5, 'cache_write_tokens': True}})
+        for value, expected in ((reply, usage), (bad, {})):
+            with mock.patch.object(router, 'invoke', return_value=value):
+                record, _, _ = router.attempt('echo', self.task, self.root / f'usage-{len(expected)}', 2, None)
+            self.assertEqual(record['usage'], expected)
+
+
     def test_option_overrides_and_empty_value_reach_request_and_status(self):
         self.save()
         for index, value in enumerate(['model-3', '']):
