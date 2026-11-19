@@ -337,3 +337,14 @@ Provider `env_prefixes` and `env_names` extend it. This preserves runtime config
 expose secrets if configured too broadly; adapters remain responsible for their
 own authentication and safe diagnostics. The dispatcher never approves drafts,
 installs adapters automatically, or enforces an adapter's tool-policy declaration.
+
+## 可选工具轨迹
+
+适配器可在 `metadata.trajectory` 返回工具输入列表，成功或失败尝试均可提供。
+示例：`{"ts": "2026-11-20T00:00:00.123+00:00", "tool": "read", "input": "工具输入", "rejected": true}`。
+时间使用带时区且完整到秒的 ISO 格式，核心统一成 UTC 毫秒格式；兼容数字 Unix 秒（不是相对秒）。无时区、不完整或越界时间会丢弃该项。
+`tool` 为 1–128 字符无空白短字符串；`input` 截至 2000 字符。可选布尔 `edit` 仅表示确认已修改文件；`rejected` 表示调用被拒绝。OpenCode 无工具模式仍记录被拒绝的调用并标记 `rejected: true`。
+每个适配器及核心分别限制最多 2000 项、JSON 编码后最多 1 MiB（使用 ASCII 转义后的 UTF-8 字节数保守计量），超过预算丢弃后续项，并在 metadata / attempt 中标记 `trajectory_truncated: true`。
+WorkBuddy 按原始行解析，跳过空行和普通日志；verbose 流使用有界收集，超量轨迹降级截断，继续收取最终 result。单个 result 超过 8 MiB 仍报 output_limit。
+换模型、重试时已采集的轨迹按顺序合并在同一文件。`trajectory.jsonl` 使用独占临时文件、0600 权限和原子替换；拒绝符号链接尝试目录，目标链接仅替换链接本身。status.json 不重复保存轨迹正文。
+调度 attempt 的 `transcript_path` 为绝对路径，失败尝试也可能包含该路径。无有效项或写入失败省略路径，不改变正文、状态或 usage。轨迹只含工具输入，不保留 CLI 会话；调用方应避免在输入中包含凭据。

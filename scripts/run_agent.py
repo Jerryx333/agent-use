@@ -2,6 +2,7 @@
 # Dispatch local adapters, try fallback routes, and persist reviewable results.
 
 import argparse
+from datetime import datetime
 import fcntl
 import hashlib
 import json
@@ -15,6 +16,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dispatcher_config import ConfigError, ProviderDisabled, dangerous_environment_name, disabled_status, load_config, resolve, resolve_config_path, scheduler_versions as core_versions, workspace_options
 from provider_process import ProcessError, invoke
+from trajectory import write_trajectory
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ENVIRONMENT_NAMES = frozenset({"PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "TERM", "PYTHONIOENCODING", "PYTHONUTF8"})
@@ -60,6 +62,7 @@ def provider_environment(route):
             if (name in names or name.startswith(prefixes)) and not dangerous_environment_name(name)}
 
 
+
 def attempt(provider, task, directory, timeout, expected, route=None, workdir=None, access="none"):
     started = time.monotonic()
     record = {"provider": provider, "state": "failed"}
@@ -74,6 +77,8 @@ def attempt(provider, task, directory, timeout, expected, route=None, workdir=No
         reply = invoke(route["command"], request, timeout + 8, environment)
         if not isinstance(reply, dict) or type(reply.get("protocol_version")) is not int or reply["protocol_version"] != 1 or reply.get("accepted") is not False:
             raise ProcessError("invalid_protocol")
+        if reply.get("state") in ("failed", "staged_for_review"):
+            write_trajectory(directory, reply.get("metadata"), record)
         if reply.get("state") == "failed":
             reason = reply.get("reason")
             if not isinstance(reason, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", reason):
